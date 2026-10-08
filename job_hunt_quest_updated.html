@@ -1,0 +1,831 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Job Hunt Quest</title>
+<style>
+  :root{
+    --bg:#f7f8f5;
+    --card:#ffffff;
+    --text:#202522;
+    --muted:#737a74;
+    --border:#d9ddd7;
+    --green:#8bd58b;
+    --yellow:#f1d35c;
+    --blue:#6ea8e8;
+    --accent:#202522;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Arial,sans-serif;
+    background:var(--bg);
+    color:var(--text);
+  }
+  .app{max-width:1000px;margin:0 auto;padding:28px 18px 48px}
+  .header{display:flex;justify-content:space-between;align-items:end;gap:20px;margin-bottom:14px}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--muted)}
+  h1{margin:4px 0 0;font-size:30px;line-height:1.1}
+  .counter{text-align:right}
+  .counter strong{display:block;font-size:28px}
+  .counter span{font-size:12px;color:var(--muted)}
+  .progress{height:8px;background:#e5e8e3;border-radius:99px;overflow:hidden;margin-bottom:22px}
+  .progress > div{height:100%;width:0;background:var(--accent);transition:width .25s}
+  .form-card{background:var(--card);border:1px solid var(--border);border-radius:18px;padding:18px;margin-bottom:28px}
+  form{display:grid;grid-template-columns:1fr 180px auto;gap:12px;align-items:end}
+  label{display:block;font-size:13px;font-weight:650}
+  input{display:block;width:100%;margin-top:7px;padding:13px 14px;border:1px solid var(--border);border-radius:12px;background:#fbfcfa;font-size:16px;outline:none}
+  input:focus{border-color:#7f877f;box-shadow:0 0 0 3px #7f877f18}
+  button{border:0;border-radius:12px;padding:13px 18px;font-size:15px;font-weight:700;cursor:pointer;min-height:48px}
+  .add-btn{background:var(--accent);color:white}
+  .message{min-height:20px;margin:9px 2px 0;font-size:13px;color:var(--muted)}
+  .stacks{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;align-items:start}
+  .stack-wrap{text-align:center}
+  .deck{
+    min-height:330px;
+    border:2px solid #aeb5ae;
+    border-radius:24px 24px 18px 18px;
+    padding:16px 13px 14px;
+    display:flex;
+    flex-direction:column;
+    gap:9px;
+    overflow:hidden;
+  }
+  .deck.selected{background:#edf8ed}
+  .deck.running{background:#fff9df}
+  .deck.rejected{background:#edf5fd}
+  .company{
+    height:48px;
+    min-height:48px;
+    border-radius:7px;
+    display:flex;
+    align-items:center;
+    padding:0 10px 0 14px;
+    text-align:left;
+    font-weight:700;
+    cursor:grab;
+    border:0;
+    transition:transform .12s,filter .12s,opacity .12s;
+    touch-action:none;
+  }
+  .company:active{cursor:grabbing}
+  .company:hover{transform:translateX(3px);filter:brightness(.98)}
+  .company.dragging{opacity:.45;transform:scale(.98)}
+  .deck.drag-over{outline:3px dashed #777;outline-offset:3px}
+  .edit-btn,.delete-btn{
+    width:30px;height:30px;min-height:30px;padding:0;margin-left:8px;
+    border-radius:8px;background:rgba(255,255,255,.5);
+    font-size:17px;line-height:1;color:#333;flex:0 0 30px;
+  }
+  .edit-btn,.delete-btn{background:rgba(255,255,255,.5);font-size:15px;line-height:1;color:#333;flex:0 0 30px}
+  .edit-btn:hover,.delete-btn:hover{background:rgba(255,255,255,.9)}
+  .delete-btn{font-size:17px}
+  .company .rounds{margin-left:auto;font-size:11px;font-weight:600;opacity:.7;white-space:nowrap}
+  .selected .company{background:var(--green)}
+  .running .company{background:var(--yellow)}
+  .rejected .company{background:var(--blue)}
+  .empty{flex:1;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:13px}
+  .label{font-size:19px;font-weight:700;margin-top:11px}
+  .count{font-size:13px;color:var(--muted);font-weight:500}
+  .hint{text-align:center;color:var(--muted);font-size:12px;margin-top:18px}
+  .motivation{
+    background:var(--card);
+    border:1px solid var(--border);
+    border-radius:18px;
+    padding:18px;
+    margin-top:28px;
+  }
+  .motivation-head{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:12px;
+    margin-bottom:12px;
+  }
+  .motivation-title{font-size:19px;font-weight:750}
+  .motivation-subtitle{font-size:12px;color:var(--muted);margin-top:2px}
+  .motivation-list{display:grid;gap:9px}
+  .motivation-item{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:11px 12px;
+    border-radius:12px;
+    background:#fbfcfa;
+    border:1px solid var(--border);
+  }
+  .motivation-item span{flex:1;min-width:0;line-height:1.4}
+  .motivation-actions{display:flex;gap:6px}
+  .motivation-btn{
+    width:34px;height:34px;min-height:34px;padding:0;
+    background:#fff;border:1px solid var(--border);
+    font-size:15px;
+  }
+  .motivation-empty{
+    color:var(--muted);
+    font-size:13px;
+    padding:8px 2px;
+  }
+
+  .question-bank{
+    background:var(--card);border:1px solid var(--border);border-radius:18px;
+    padding:18px;margin-top:28px;
+  }
+  .question-head{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:12px}
+  .question-title{font-size:19px;font-weight:750}
+  .question-subtitle{font-size:12px;color:var(--muted);margin-top:2px}
+  .question-form{display:grid;grid-template-columns:2fr 1fr 1fr 1fr auto;gap:10px;align-items:end;margin-bottom:16px}
+  .question-form label{display:block;font-size:13px;font-weight:650}
+  .question-form textarea,.question-form select{
+    display:block;width:100%;margin-top:7px;border:1px solid var(--border);
+    border-radius:12px;background:#fbfcfa;font-size:14px;outline:none;
+  }
+  .question-form textarea{min-height:48px;padding:13px 14px;resize:vertical;font-family:inherit}
+  .question-form select{height:48px;padding:0 10px}
+  .question-form textarea:focus,.question-form select:focus{
+    border-color:#7f877f;box-shadow:0 0 0 3px #7f877f18
+  }
+  .question-add{background:#40566d;color:white;white-space:nowrap}
+  .question-list{display:grid;gap:9px}
+  .question-card{
+    padding:13px;border:1px solid var(--border);border-radius:12px;
+    background:#fbfcfa;
+  }
+  .question-text{font-weight:700;line-height:1.45}
+  .question-meta{display:flex;flex-wrap:wrap;gap:7px;margin-top:9px}
+  .question-tag{
+    padding:5px 9px;border-radius:999px;background:#edf1f4;
+    color:#5f6b74;font-size:11px;font-weight:650
+  }
+  .question-actions{display:flex;gap:6px;margin-top:10px}
+  .question-action{
+    min-height:34px;padding:7px 11px;background:#fff;
+    border:1px solid var(--border);font-size:12px;color:var(--text)
+  }
+  .question-empty{color:var(--muted);font-size:13px;padding:7px 2px}
+  @media(max-width:900px){
+    .question-form{grid-template-columns:1fr 1fr}
+    .question-form .question-field:first-child{grid-column:1/-1}
+  }
+  @media(max-width:560px){
+    .question-form{grid-template-columns:1fr}
+    .question-form .question-field:first-child{grid-column:auto}
+  }
+
+  .footer-actions{display:flex;justify-content:center;gap:10px;margin-top:18px}
+  .secondary{background:#fff;border:1px solid var(--border);color:var(--text)}
+  @media(max-width:760px){
+    form{grid-template-columns:1fr}
+    .stacks{grid-template-columns:1fr}
+    .deck{min-height:180px}
+    .header{align-items:start}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="header">
+    <div>
+      <div class="eyebrow">JOB HUNT QUEST</div>
+      <h1>Journey to Company #100 🎯</h1>
+    </div>
+    <div class="counter">
+      <strong id="total">10 / 100</strong>
+      <span>companies</span>
+    </div>
+  </div>
+
+  <div class="progress"><div id="progress"></div></div>
+
+  <div class="form-card">
+    <form id="addForm">
+      <label>
+        Company name
+        <input id="companyName" type="text" placeholder="e.g. Infosys" maxlength="80" autocomplete="off" required>
+      </label>
+      <label>
+        No. of interviews
+        <input id="interviewCount" type="number" min="1" max="20" value="1" required>
+      </label>
+      <button class="add-btn" type="submit">+ Add Company</button>
+    </form>
+    <div id="message" class="message" aria-live="polite"></div>
+    <div id="savedState" style="font-size:11px;color:#8a918b;margin-top:2px;">✓ Your companies are saved in this browser</div>
+  </div>
+
+  <div class="stacks">
+    <div class="stack-wrap">
+      <div id="selectedDeck" class="deck selected"></div>
+      <div class="label">Selected <span id="selectedCount" class="count">(0)</span></div>
+    </div>
+
+    <div class="stack-wrap">
+      <div id="runningDeck" class="deck running"></div>
+      <div class="label">Running <span id="runningCount" class="count">(0)</span></div>
+    </div>
+
+    <div class="stack-wrap">
+      <div id="rejectedDeck" class="deck rejected"></div>
+      <div class="label">Not Selected <span id="rejectedCount" class="count">(10)</span></div>
+    </div>
+  </div>
+
+  <div class="hint">Click a company card to move it: Running → Selected → Not Selected → Running</div>
+
+
+  <section class="question-bank">
+    <div class="question-head">
+      <div>
+        <div class="question-title">🧠 Interview Question Bank</div>
+        <div class="question-subtitle">Save the questions companies ask you and build your own preparation bank.</div>
+      </div>
+    </div>
+
+    <form id="questionForm" class="question-form">
+      <label class="question-field">
+        Question
+        <textarea id="questionInput" maxlength="500"
+          placeholder="e.g. Find duplicate characters in a String using Java Streams" required></textarea>
+      </label>
+
+      <label class="question-field">
+        Company
+        <select id="questionCompany" required>
+          <option value="">Select company</option>
+        </select>
+      </label>
+
+      <label class="question-field">
+        Topic
+        <select id="questionTopic" required>
+          <option value="">Select topic</option>
+          <option>Java</option>
+          <option>Java Streams</option>
+          <option>Collections</option>
+          <option>Spring Boot</option>
+          <option>Microservices</option>
+          <option>React</option>
+          <option>SQL</option>
+          <option>DSA</option>
+          <option>System Design</option>
+          <option>Behavioral</option>
+          <option>Other</option>
+        </select>
+      </label>
+
+      <label class="question-field">
+        Round
+        <select id="questionRound" required>
+          <option value="">Select round</option>
+          <option>Technical</option>
+          <option>HR</option>
+          <option>Managerial</option>
+          <option>Coding</option>
+          <option>System Design</option>
+          <option>Behavioral</option>
+          <option>Other</option>
+        </select>
+      </label>
+
+      <button class="question-add" type="submit">+ Add Question</button>
+    </form>
+
+    <div id="questionList" class="question-list"></div>
+  </section>
+
+  <section class="motivation">
+    <div class="motivation-head">
+      <div>
+        <div class="motivation-title">💛 My Motivation</div>
+        <div class="motivation-subtitle">Write the lines you want to see when the job hunt gets tough.</div>
+      </div>
+      <button id="addMotivation" class="secondary" type="button">+ Add line</button>
+    </div>
+    <div id="motivationList" class="motivation-list"></div>
+  </section>
+
+  <div class="footer-actions">
+    <button id="resetButton" class="secondary" type="button">Reset to my current 10</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  const STORAGE_KEY = "job-hunt-quest-v1";
+
+  const initialCompanies = [
+    {id:1, name:"Capgemini", rounds:4, status:"rejected"},
+    {id:2, name:"EPAM", rounds:1, status:"rejected"},
+    {id:3, name:"TCS", rounds:2, status:"rejected"},
+    {id:4, name:"Baxter", rounds:1, status:"rejected"},
+    {id:5, name:"Calsoft", rounds:1, status:"rejected"},
+    {id:6, name:"NuSummit", rounds:1, status:"rejected"},
+    {id:7, name:"Aziro", rounds:2, status:"rejected"},
+    {id:8, name:"Zensar", rounds:1, status:"rejected"},
+    {id:9, name:"Deloitte", rounds:1, status:"rejected"},
+    {id:10, name:"Mphasis", rounds:1, status:"rejected"}
+  ];
+
+  let companies = load();
+  let nextId = companies.reduce((m,c) => Math.max(m,c.id), 0) + 1;
+
+  const els = {
+    form: document.getElementById("addForm"),
+    name: document.getElementById("companyName"),
+    rounds: document.getElementById("interviewCount"),
+    message: document.getElementById("message"),
+    total: document.getElementById("total"),
+    progress: document.getElementById("progress"),
+    selected: document.getElementById("selectedDeck"),
+    running: document.getElementById("runningDeck"),
+    rejected: document.getElementById("rejectedDeck"),
+    selectedCount: document.getElementById("selectedCount"),
+    runningCount: document.getElementById("runningCount"),
+    rejectedCount: document.getElementById("rejectedCount"),
+    reset: document.getElementById("resetButton")
+  };
+
+  function load(){
+    try{
+      const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+      if(Array.isArray(saved)){
+        return saved.filter(c =>
+          c &&
+          Number.isFinite(Number(c.id)) &&
+          typeof c.name === "string" &&
+          ["selected","running","rejected"].includes(c.status)
+        ).map(c => ({
+          id:Number(c.id),
+          name:c.name.trim(),
+          rounds:Math.max(1, Math.min(20, Number(c.rounds) || 1)),
+          status:c.status
+        })).filter(c => c.name);
+      }
+    }catch(error){
+      console.warn("Could not restore saved companies:", error);
+    }
+    return structuredClone(initialCompanies);
+  }
+
+  function save(){
+    try{
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(companies));
+    }catch(error){
+      els.message.textContent = "Your browser could not save the latest change.";
+      console.warn("Could not save companies:", error);
+    }
+  }
+
+  function escapeHtml(value){
+    return String(value).replace(/[&<>"']/g, c => ({
+      "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"
+    }[c]));
+  }
+
+  function renderDeck(deck, items){
+    deck.innerHTML = "";
+    if(!items.length){
+      const empty = document.createElement("div");
+      empty.className = "empty";
+      empty.textContent = "No companies yet";
+      deck.appendChild(empty);
+      return;
+    }
+
+    [...items].reverse().forEach(company => {
+      const card = document.createElement("button");
+      card.type = "button";
+      card.className = "company";
+      card.dataset.id = company.id;
+      card.draggable = true;
+      card.innerHTML =
+        `<span>${escapeHtml(company.name)}</span>` +
+        `<span class="rounds">${company.rounds} interview${company.rounds === 1 ? "" : "s"}</span>` +
+        `<button type="button" class="edit-btn" title="Edit interview count" aria-label="Edit interview count for ${escapeHtml(company.name)}">✎</button>` +
+        `<button type="button" class="delete-btn" title="Delete company" aria-label="Delete ${escapeHtml(company.name)}">×</button>`;
+      deck.appendChild(card);
+    });
+  }
+
+  function render(){
+    const groups = {selected:[], running:[], rejected:[]};
+    companies.forEach(c => groups[c.status].push(c));
+
+    renderDeck(els.selected, groups.selected);
+    renderDeck(els.running, groups.running);
+    renderDeck(els.rejected, groups.rejected);
+
+    els.selectedCount.textContent = `(${groups.selected.length})`;
+    els.runningCount.textContent = `(${groups.running.length})`;
+    els.rejectedCount.textContent = `(${groups.rejected.length})`;
+
+    els.total.textContent = `${companies.length} / 100`;
+    els.progress.style.width = `${Math.min(companies.length,100)}%`;
+
+    if(typeof populateQuestionCompanies === "function"){
+      populateQuestionCompanies();
+    }
+    if(typeof renderQuestions === "function"){
+      renderQuestions();
+    }
+  }
+
+  els.form.addEventListener("submit", event => {
+    event.preventDefault();
+
+    const name = els.name.value.trim();
+    const rounds = Number(els.rounds.value);
+
+    if(!name){
+      els.message.textContent = "Please enter a company name.";
+      els.name.focus();
+      return;
+    }
+
+    if(!Number.isInteger(rounds) || rounds < 1 || rounds > 20){
+      els.message.textContent = "Interview count must be between 1 and 20.";
+      els.rounds.focus();
+      return;
+    }
+
+    if(companies.length >= 100){
+      els.message.textContent = "🎉 Company #100 reached!";
+      return;
+    }
+
+    const company = {
+      id: nextId++,
+      name,
+      rounds,
+      status:"running"
+    };
+
+    companies.push(company);
+    save();
+    render();
+
+    els.message.textContent = `${name} added as Company #${companies.length} 🟡`;
+    els.name.value = "";
+    els.rounds.value = "1";
+    els.name.focus();
+  });
+
+  let draggedId = null;
+
+  document.querySelector(".stacks").addEventListener("dragstart", event => {
+    const card = event.target.closest(".company");
+    if(!card) return;
+    draggedId = Number(card.dataset.id);
+    card.classList.add("dragging");
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(draggedId));
+  });
+
+  document.querySelector(".stacks").addEventListener("dragend", event => {
+    const card = event.target.closest(".company");
+    if(card) card.classList.remove("dragging");
+    document.querySelectorAll(".deck").forEach(deck => deck.classList.remove("drag-over"));
+    draggedId = null;
+  });
+
+  document.querySelector(".stacks").addEventListener("dragover", event => {
+    const deck = event.target.closest(".deck");
+    if(!deck) return;
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    document.querySelectorAll(".deck").forEach(d => d.classList.remove("drag-over"));
+    deck.classList.add("drag-over");
+  });
+
+  document.querySelector(".stacks").addEventListener("dragleave", event => {
+    const deck = event.target.closest(".deck");
+    if(deck && !deck.contains(event.relatedTarget)) deck.classList.remove("drag-over");
+  });
+
+  document.querySelector(".stacks").addEventListener("drop", event => {
+    const deck = event.target.closest(".deck");
+    if(!deck) return;
+    event.preventDefault();
+
+    const id = Number(event.dataTransfer.getData("text/plain") || draggedId);
+    const company = companies.find(c => c.id === id);
+    if(!company) return;
+
+    const targetStatus = deck.id === "selectedDeck"
+      ? "selected"
+      : deck.id === "runningDeck"
+        ? "running"
+        : "rejected";
+
+    company.status = targetStatus;
+    save();
+    render();
+
+    const label = targetStatus === "selected"
+      ? "Selected 🟢"
+      : targetStatus === "running"
+        ? "Running 🟡"
+        : "Not Selected 🔵";
+
+    els.message.textContent = `${company.name} moved to ${label}`;
+    deck.classList.remove("drag-over");
+    draggedId = null;
+  });
+
+  document.querySelector(".stacks").addEventListener("click", event => {
+    const editButton = event.target.closest(".edit-btn");
+    if(editButton){
+      const card = editButton.closest(".company");
+      const company = companies.find(c => c.id === Number(card.dataset.id));
+      if(!company) return;
+
+      const entered = window.prompt(
+        `How many interviews did you have with ${company.name}?`,
+        String(company.rounds)
+      );
+
+      if(entered === null) return;
+
+      const rounds = Number(entered);
+      if(!Number.isInteger(rounds) || rounds < 1 || rounds > 20){
+        els.message.textContent = "Interview count must be a whole number between 1 and 20.";
+        return;
+      }
+
+      company.rounds = rounds;
+      save();
+      render();
+      els.message.textContent = `${company.name}: interview count updated to ${rounds}.`;
+      return;
+    }
+
+    const deleteButton = event.target.closest(".delete-btn");
+    if(deleteButton){
+      const card = deleteButton.closest(".company");
+      const company = companies.find(c => c.id === Number(card.dataset.id));
+      if(!company) return;
+
+      const confirmed = window.confirm(`Delete ${company.name} from your job hunt?`);
+      if(!confirmed) return;
+
+      companies = companies.filter(c => c.id !== company.id);
+      save();
+      render();
+      els.message.textContent = `${company.name} deleted.`;
+      return;
+    }
+
+    const card = event.target.closest(".company");
+    if(!card) return;
+
+    // Keep a click fallback for accessibility/touch:
+    // Running → Selected → Not Selected → Running
+    const company = companies.find(c => c.id === Number(card.dataset.id));
+    if(!company) return;
+
+    const next = {
+      running:"selected",
+      selected:"rejected",
+      rejected:"running"
+    };
+
+    company.status = next[company.status];
+    save();
+    render();
+
+    const label = company.status === "selected"
+      ? "Selected 🟢"
+      : company.status === "running"
+        ? "Running 🟡"
+        : "Not Selected 🔵";
+
+    els.message.textContent = `${company.name} moved to ${label}`;
+  });
+
+  els.reset.addEventListener("click", () => {
+    const confirmed = window.confirm("Reset your tracker to the original 10 companies? This will remove companies you added later.");
+    if(!confirmed) return;
+
+    companies = structuredClone(initialCompanies);
+    nextId = 11;
+    save();
+    render();
+    els.message.textContent = "Reset to your current 10 companies.";
+  });
+
+
+  const QUESTION_KEY = "job-hunt-quest-questions-v1";
+  let questions = loadQuestions();
+
+  function loadQuestions(){
+    try{
+      const saved = JSON.parse(localStorage.getItem(QUESTION_KEY));
+      if(Array.isArray(saved)){
+        return saved.filter(q =>
+          q &&
+          typeof q.question === "string" && q.question.trim() &&
+          typeof q.company === "string" && q.company.trim() &&
+          typeof q.topic === "string" && q.topic.trim() &&
+          typeof q.round === "string" && q.round.trim()
+        );
+      }
+    }catch(error){
+      console.warn("Could not restore saved questions:", error);
+    }
+    return [];
+  }
+
+  function saveQuestions(){
+    try{
+      localStorage.setItem(QUESTION_KEY, JSON.stringify(questions));
+    }catch(error){
+      console.warn("Could not save questions:", error);
+    }
+  }
+
+  function populateQuestionCompanies(){
+    const select = document.getElementById("questionCompany");
+    if(!select) return;
+
+    const current = select.value;
+    select.innerHTML = '<option value="">Select company</option>';
+
+    companies.forEach(company => {
+      const option = document.createElement("option");
+      option.value = company.name;
+      option.textContent = company.name;
+      select.appendChild(option);
+    });
+
+    if(companies.some(company => company.name === current)){
+      select.value = current;
+    }
+  }
+
+  function renderQuestions(){
+    const list = document.getElementById("questionList");
+    if(!list) return;
+
+    list.innerHTML = "";
+
+    if(!questions.length){
+      list.innerHTML = '<div class="question-empty">No interview questions yet. Add your first one above ✨</div>';
+      return;
+    }
+
+    questions.slice().reverse().forEach((item, reverseIndex) => {
+      const actualIndex = questions.length - 1 - reverseIndex;
+      const card = document.createElement("div");
+      card.className = "question-card";
+      card.innerHTML =
+        `<div class="question-text">${escapeHtml(item.question)}</div>` +
+        `<div class="question-meta">` +
+          `<span class="question-tag">🏢 ${escapeHtml(item.company)}</span>` +
+          `<span class="question-tag">🏷️ ${escapeHtml(item.topic)}</span>` +
+          `<span class="question-tag">🎤 ${escapeHtml(item.round)}</span>` +
+        `</div>` +
+        `<div class="question-actions">` +
+          `<button type="button" class="question-action edit-question" data-index="${actualIndex}">✎ Edit</button>` +
+          `<button type="button" class="question-action delete-question" data-index="${actualIndex}">× Delete</button>` +
+        `</div>`;
+      list.appendChild(card);
+    });
+  }
+
+  document.getElementById("questionForm").addEventListener("submit", event => {
+    event.preventDefault();
+
+    const question = document.getElementById("questionInput").value.trim();
+    const company = document.getElementById("questionCompany").value;
+    const topic = document.getElementById("questionTopic").value;
+    const round = document.getElementById("questionRound").value;
+
+    if(!question || !company || !topic || !round) return;
+
+    questions.push({question, company, topic, round});
+    saveQuestions();
+    renderQuestions();
+
+    document.getElementById("questionInput").value = "";
+    document.getElementById("questionTopic").value = "";
+    document.getElementById("questionRound").value = "";
+    document.getElementById("questionInput").focus();
+  });
+
+  document.getElementById("questionList").addEventListener("click", event => {
+    const edit = event.target.closest(".edit-question");
+    const del = event.target.closest(".delete-question");
+
+    if(edit){
+      const index = Number(edit.dataset.index);
+      const item = questions[index];
+      if(!item) return;
+
+      const updated = window.prompt("Edit interview question:", item.question);
+      if(updated !== null && updated.trim()){
+        item.question = updated.trim();
+        saveQuestions();
+        renderQuestions();
+      }
+      return;
+    }
+
+    if(del){
+      const index = Number(del.dataset.index);
+      if(!questions[index]) return;
+
+      if(window.confirm("Delete this interview question?")){
+        questions.splice(index, 1);
+        saveQuestions();
+        renderQuestions();
+      }
+    }
+  });
+
+
+  const MOTIVATION_KEY = "job-hunt-quest-motivations-v1";
+  let motivations = loadMotivations();
+
+  function loadMotivations(){
+    try{
+      const saved = JSON.parse(localStorage.getItem(MOTIVATION_KEY));
+      return Array.isArray(saved) ? saved.filter(x => typeof x === "string" && x.trim()) : [];
+    }catch{
+      return [];
+    }
+  }
+
+  function saveMotivations(){
+    localStorage.setItem(MOTIVATION_KEY, JSON.stringify(motivations));
+  }
+
+  function renderMotivations(){
+    const list = document.getElementById("motivationList");
+    list.innerHTML = "";
+
+    if(!motivations.length){
+      list.innerHTML = '<div class="motivation-empty">No motivation lines yet. Add your first one above ✨</div>';
+      return;
+    }
+
+    motivations.forEach((line,index) => {
+      const item = document.createElement("div");
+      item.className = "motivation-item";
+      item.innerHTML =
+        `<span>${escapeHtml(line)}</span>
+         <div class="motivation-actions">
+           <button type="button" class="motivation-btn edit-motivation" data-index="${index}" title="Edit">✎</button>
+           <button type="button" class="motivation-btn delete-motivation" data-index="${index}" title="Delete">×</button>
+         </div>`;
+      list.appendChild(item);
+    });
+  }
+
+  document.getElementById("addMotivation").addEventListener("click", () => {
+    const line = window.prompt("Write your motivation line:");
+    if(line === null) return;
+
+    const clean = line.trim();
+    if(!clean) return;
+
+    motivations.push(clean);
+    saveMotivations();
+    renderMotivations();
+  });
+
+  document.getElementById("motivationList").addEventListener("click", event => {
+    const edit = event.target.closest(".edit-motivation");
+    const del = event.target.closest(".delete-motivation");
+
+    if(edit){
+      const index = Number(edit.dataset.index);
+      const updated = window.prompt("Edit your motivation line:", motivations[index]);
+      if(updated === null) return;
+
+      const clean = updated.trim();
+      if(!clean) return;
+
+      motivations[index] = clean;
+      saveMotivations();
+      renderMotivations();
+      return;
+    }
+
+    if(del){
+      const index = Number(del.dataset.index);
+      const confirmed = window.confirm("Delete this motivation line?");
+      if(!confirmed) return;
+
+      motivations.splice(index,1);
+      saveMotivations();
+      renderMotivations();
+    }
+  });
+
+  render();
+  renderMotivations();
+})();
+</script>
+</body>
+</html>
