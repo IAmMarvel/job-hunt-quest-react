@@ -385,8 +385,8 @@ function App() {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, nextSession) => {
       setSession(nextSession);
-      setCloudLoading(Boolean(nextSession));
       if (!nextSession) {
+        setCloudLoading(false);
         setCompanies([]);
         setQuestions([]);
         setSkills([]);
