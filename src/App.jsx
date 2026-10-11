@@ -10,7 +10,6 @@ import {
   deleteSkill as deleteSkillRemote,
   fetchUserData,
   importBrowserData,
-  resetCompanies as resetUserCompanies,
   supabase,
   updateCompany,
   updateMotivation,
@@ -584,26 +583,6 @@ function App() {
     if (company) moveCompany(company.id, status);
     setDraggedId(null);
     setDragOverStatus(null);
-  }
-
-  async function resetCompanies() {
-    if (
-      !window.confirm(
-        "Reset your tracker to the original 10 companies? This will remove companies you added later.",
-      )
-    ) {
-      return;
-    }
-    let resetData = INITIAL_COMPANIES.map((company) => ({ ...company }));
-    if (user) {
-      const result = await runCloudMutation(() =>
-        resetUserCompanies(user.id, INITIAL_COMPANIES),
-      );
-      if (!result.ok) return;
-      resetData = result.value;
-    }
-    setCompanies(resetData);
-    setMessage("Reset to your current 10 companies.");
   }
 
   async function addQuestion(event) {
@@ -1246,11 +1225,6 @@ function App() {
         </div>
       </section>
 
-      <div className="footer-actions">
-        <button className="secondary" type="button" onClick={resetCompanies}>
-          Reset to my current 10
-        </button>
-      </div>
     </main>
   );
 }

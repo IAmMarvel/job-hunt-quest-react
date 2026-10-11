@@ -66,19 +66,6 @@ export const updateCompany = (id, changes) =>
   updateRow(TABLES.companies, id, changes);
 export const deleteCompany = (id) => deleteRow(TABLES.companies, id);
 
-export async function resetCompanies(userId, initialCompanies) {
-  return unwrap(
-    await supabase.rpc("reset_user_companies", {
-      p_user_id: userId,
-      p_companies: initialCompanies.map(({ name, rounds, status }) => ({
-        name,
-        rounds,
-        status,
-      })),
-    }),
-  );
-}
-
 export const createQuestion = (userId, question) =>
   insertRow(TABLES.questions, { ...question, user_id: userId });
 export const updateQuestion = (id, changes) =>

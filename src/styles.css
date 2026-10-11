@@ -579,13 +579,6 @@ textarea:focus {
   background: #fff;
 }
 
-.footer-actions {
-  display: flex;
-  justify-content: center;
-  gap: 10px;
-  margin-top: 18px;
-}
-
 .account-actions {
   display: flex;
   align-items: center;

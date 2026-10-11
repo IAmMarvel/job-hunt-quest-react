@@ -83,33 +83,4 @@ create policy "Users manage their own motivation lines"
   using ((select auth.uid()) = user_id)
   with check ((select auth.uid()) = user_id);
 
-create or replace function public.reset_user_companies(
-  p_user_id uuid,
-  p_companies jsonb
-)
-returns setof public.companies
-language plpgsql
-security invoker
-set search_path = ''
-as $$
-begin
-  if auth.uid() is null or auth.uid() <> p_user_id then
-    raise exception 'Not authorized';
-  end if;
-
-  delete from public.companies where user_id = p_user_id;
-
-  return query
-    insert into public.companies (user_id, name, rounds, status)
-    select p_user_id, seed.name, seed.rounds, seed.status
-    from jsonb_to_recordset(p_companies) as seed(
-      name text,
-      rounds integer,
-      status text
-    )
-    returning *;
-end;
-$$;
-
-revoke all on function public.reset_user_companies(uuid, jsonb) from public;
-grant execute on function public.reset_user_companies(uuid, jsonb) to authenticated;
+drop function if exists public.reset_user_companies(uuid, jsonb);
