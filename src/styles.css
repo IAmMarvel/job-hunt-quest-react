@@ -586,6 +586,97 @@ textarea:focus {
   margin-top: 18px;
 }
 
+.account-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.setup-notice,
+.import-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 12px 14px;
+  border: 1px solid #eadca1;
+  border-radius: 12px;
+  background: #fff9df;
+  color: #67561e;
+  font-size: 13px;
+}
+
+.import-row {
+  margin-top: -12px;
+  border-color: var(--border);
+  background: #fff;
+  color: var(--text);
+}
+
+.import-row p {
+  margin: 0;
+}
+
+.auth-page {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: min(100%, 440px);
+  padding: 28px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--card);
+  box-shadow: 0 12px 36px #2025220d;
+}
+
+.auth-card h1 {
+  margin-top: 10px;
+  font-size: 27px;
+}
+
+.auth-card > p {
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 20px;
+}
+
+.auth-form button {
+  margin-top: 4px;
+}
+
+.auth-toggle {
+  width: 100%;
+  margin-top: 8px;
+  color: #40566d;
+  background: transparent;
+}
+
+.auth-error {
+  position: fixed;
+  bottom: 12px;
+  left: 50%;
+  width: min(90vw, 520px);
+  padding: 12px;
+  border-radius: 10px;
+  color: #842c2c;
+  background: #fff0f0;
+  text-align: center;
+  transform: translateX(-50%);
+}
+
 @media (max-width: 900px) {
   .stacks {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -609,6 +700,11 @@ textarea:focus {
 
   .skill-list {
     grid-template-columns: 1fr;
+  }
+
+  .account-actions {
+    grid-column: 1 / -1;
+    justify-content: flex-end;
   }
 }
 
@@ -635,6 +731,12 @@ textarea:focus {
   .skill-form,
   .skill-tools {
     grid-template-columns: 1fr;
+  }
+
+  .setup-notice,
+  .import-row {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .question-field:first-child {

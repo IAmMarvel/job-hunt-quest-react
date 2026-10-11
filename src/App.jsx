@@ -1,4 +1,22 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import {
+  createCompany,
+  createMotivation,
+  createQuestion,
+  createSkill,
+  deleteCompany as deleteCompanyRemote,
+  deleteMotivation as deleteMotivationRemote,
+  deleteQuestion as deleteQuestionRemote,
+  deleteSkill as deleteSkillRemote,
+  fetchUserData,
+  importBrowserData,
+  resetCompanies as resetUserCompanies,
+  supabase,
+  updateCompany,
+  updateMotivation,
+  updateQuestion,
+  updateSkill,
+} from "./lib/supabase.js";
 
 const STORAGE_KEYS = {
   companies: "job-hunt-quest-v1",
@@ -135,18 +153,106 @@ function loadSkills() {
   );
 }
 
-function usePersistentState(key, initializer) {
+function usePersistentState(key, initializer, persistLocally) {
   const [value, setValue] = useState(initializer);
 
   useEffect(() => {
-    try {
-      localStorage.setItem(key, JSON.stringify(value));
-    } catch (error) {
-      console.warn(`Could not save ${key}:`, error);
+    if (persistLocally) {
+      try {
+        localStorage.setItem(key, JSON.stringify(value));
+      } catch (error) {
+        console.warn(`Could not save ${key}:`, error);
+      }
     }
-  }, [key, value]);
+  }, [key, value, persistLocally]);
 
   return [value, setValue];
+}
+
+function AuthScreen() {
+  const [creatingAccount, setCreatingAccount] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [authMessage, setAuthMessage] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function submit(event) {
+    event.preventDefault();
+    setBusy(true);
+    setAuthMessage("");
+
+    try {
+      const result = creatingAccount
+        ? await supabase.auth.signUp({ email: email.trim(), password })
+        : await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password,
+          });
+      if (result.error) throw result.error;
+      if (creatingAccount && !result.data.session) {
+        setAuthMessage("Account created. Check your email to confirm your address, then sign in.");
+      }
+    } catch (error) {
+      setAuthMessage(error.message || "Authentication failed. Please try again.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <main className="auth-page">
+      <section className="auth-card">
+        <div className="eyebrow">JOB HUNT QUEST</div>
+        <h1>{creatingAccount ? "Create your account" : "Welcome back"}</h1>
+        <p>Sign in to keep your job hunt data synced across devices.</p>
+        <form className="auth-form" onSubmit={submit}>
+          <label>
+            Email
+            <input
+              type="email"
+              autoComplete="email"
+              required
+              value={email}
+              onChange={(event) => setEmail(event.target.value)}
+            />
+          </label>
+          <label>
+            Password
+            <input
+              type="password"
+              autoComplete={creatingAccount ? "new-password" : "current-password"}
+              minLength="8"
+              required
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+            />
+          </label>
+          <button className="add-btn" type="submit" disabled={busy}>
+            {busy
+              ? "Please wait..."
+              : creatingAccount
+                ? "Create account"
+                : "Sign in"}
+          </button>
+        </form>
+        <div className="message" role="status" aria-live="polite">
+          {authMessage}
+        </div>
+        <button
+          className="auth-toggle"
+          type="button"
+          onClick={() => {
+            setCreatingAccount((current) => !current);
+            setAuthMessage("");
+          }}
+        >
+          {creatingAccount
+            ? "Already have an account? Sign in"
+            : "New here? Create an account"}
+        </button>
+      </section>
+    </main>
+  );
 }
 
 function SectionHeading({ title, subtitle, aside }) {
@@ -207,16 +313,23 @@ function App() {
   const [companies, setCompanies] = usePersistentState(
     STORAGE_KEYS.companies,
     loadCompanies,
+    !supabase,
   );
   const [questions, setQuestions] = usePersistentState(
     STORAGE_KEYS.questions,
     loadQuestions,
+    !supabase,
   );
   const [motivations, setMotivations] = usePersistentState(
     STORAGE_KEYS.motivations,
     loadMotivations,
+    !supabase,
   );
-  const [skills, setSkills] = usePersistentState(STORAGE_KEYS.skills, loadSkills);
+  const [skills, setSkills] = usePersistentState(
+    STORAGE_KEYS.skills,
+    loadSkills,
+    !supabase,
+  );
 
   const [companyName, setCompanyName] = useState("");
   const [interviewCount, setInterviewCount] = useState("1");
@@ -234,11 +347,102 @@ function App() {
   const [skillStatus, setSkillStatus] = useState(SKILL_STATUSES[0]);
   const [skillSearch, setSkillSearch] = useState("");
   const [skillFilter, setSkillFilter] = useState("All");
+  const [session, setSession] = useState(null);
+  const [authLoading, setAuthLoading] = useState(Boolean(supabase));
+  const [cloudLoading, setCloudLoading] = useState(false);
+  const [cloudError, setCloudError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [cloudReload, setCloudReload] = useState(0);
+  const legacyData = useRef(null);
 
-  const nextCompanyId = useMemo(
-    () => companies.reduce((highest, company) => Math.max(highest, company.id), 0) + 1,
-    [companies],
-  );
+  if (!legacyData.current) {
+    legacyData.current = {
+      companies: loadCompanies(),
+      questions: loadQuestions(),
+      skills: loadSkills(),
+      motivations: loadMotivations(),
+    };
+  }
+
+  const user = session?.user ?? null;
+
+  useEffect(() => {
+    if (!supabase) return undefined;
+    let active = true;
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      if (error) setCloudError(error.message);
+      if (data?.session) setCloudLoading(true);
+      setSession(data?.session ?? null);
+      setAuthLoading(false);
+    }).catch((error) => {
+      if (!active) return;
+      setCloudError(error.message || "Could not restore your sign-in session.");
+      setAuthLoading(false);
+    });
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+      setSession(nextSession);
+      setCloudLoading(Boolean(nextSession));
+      if (!nextSession) {
+        setCompanies([]);
+        setQuestions([]);
+        setSkills([]);
+        setMotivations([]);
+      }
+    });
+
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [setCompanies, setMotivations, setQuestions, setSkills]);
+
+  useEffect(() => {
+    if (!user) {
+      setCloudLoading(false);
+      return undefined;
+    }
+
+    let active = true;
+    setCloudLoading(true);
+    setCloudError("");
+    fetchUserData()
+      .then((data) => {
+        if (!active) return;
+        setCompanies(data.companies);
+        setQuestions(data.questions);
+        setSkills(data.skills);
+        setMotivations(data.motivations);
+      })
+      .catch((error) => {
+        if (active) {
+          setCloudError(error.message || "Could not load your saved data.");
+        }
+      })
+      .finally(() => {
+        if (active) setCloudLoading(false);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [user?.id, cloudReload, setCompanies, setMotivations, setQuestions, setSkills]);
+
+  async function runCloudMutation(operation) {
+    setSaving(true);
+    try {
+      return { ok: true, value: await operation() };
+    } catch (error) {
+      setMessage(`Could not save your change: ${error.message || "Unknown error"}`);
+      return { ok: false, value: null };
+    } finally {
+      setSaving(false);
+    }
+  }
 
   const groups = useMemo(
     () =>
@@ -264,7 +468,7 @@ function App() {
       .reverse();
   }, [skills, skillSearch, skillFilter]);
 
-  function addCompany(event) {
+  async function addCompany(event) {
     event.preventDefault();
     const name = companyName.trim();
     const rounds = Number(interviewCount);
@@ -282,21 +486,40 @@ function App() {
       return;
     }
 
-    setCompanies((current) => [
-      ...current,
-      { id: nextCompanyId, name, rounds, status: "running" },
-    ]);
+    const newCompany = { name, rounds, status: "running" };
+    let savedCompany = {
+      ...newCompany,
+      id:
+        Math.max(
+          0,
+          ...companies.map((company) => Number(company.id) || 0),
+        ) + 1,
+    };
+    if (user) {
+      const result = await runCloudMutation(() =>
+        createCompany(user.id, newCompany),
+      );
+      if (!result.ok) return;
+      savedCompany = result.value;
+    }
+    setCompanies((current) => [...current, savedCompany]);
     setMessage(`${name} added as Company #${companies.length + 1} 🟡`);
     setCompanyName("");
     setInterviewCount("1");
   }
 
-  function moveCompany(id, targetStatus) {
+  async function moveCompany(id, targetStatus) {
     const company = companies.find((item) => item.id === id);
     if (!company) return;
 
     const status =
       targetStatus ?? NEXT_STATUS[company.status];
+    if (user) {
+      const result = await runCloudMutation(() =>
+        updateCompany(id, { status }),
+      );
+      if (!result.ok) return;
+    }
     setCompanies((current) =>
       current.map((item) =>
         item.id === id ? { ...item, status } : item,
@@ -305,7 +528,7 @@ function App() {
     setMessage(`${company.name} moved to ${STATUS_LABELS[status]}.`);
   }
 
-  function editCompany(company) {
+  async function editCompany(company) {
     const entered = window.prompt(
       `How many interviews did you have with ${company.name}?`,
       String(company.rounds),
@@ -318,6 +541,12 @@ function App() {
       return;
     }
 
+    if (user) {
+      const result = await runCloudMutation(() =>
+        updateCompany(company.id, { rounds }),
+      );
+      if (!result.ok) return;
+    }
     setCompanies((current) =>
       current.map((item) =>
         item.id === company.id ? { ...item, rounds } : item,
@@ -326,8 +555,14 @@ function App() {
     setMessage(`${company.name}: interview count updated to ${rounds}.`);
   }
 
-  function deleteCompany(company) {
+  async function deleteCompany(company) {
     if (!window.confirm(`Delete ${company.name} from your job hunt?`)) return;
+    if (user) {
+      const result = await runCloudMutation(() =>
+        deleteCompanyRemote(company.id),
+      );
+      if (!result.ok) return;
+    }
     setCompanies((current) =>
       current.filter((item) => item.id !== company.id),
     );
@@ -342,13 +577,16 @@ function App() {
 
   function handleDrop(event, status) {
     event.preventDefault();
-    const id = Number(event.dataTransfer.getData("text/plain")) || draggedId;
-    if (id !== null) moveCompany(id, status);
+    const droppedId = event.dataTransfer.getData("text/plain") || draggedId;
+    const company = companies.find(
+      (item) => String(item.id) === String(droppedId),
+    );
+    if (company) moveCompany(company.id, status);
     setDraggedId(null);
     setDragOverStatus(null);
   }
 
-  function resetCompanies() {
+  async function resetCompanies() {
     if (
       !window.confirm(
         "Reset your tracker to the original 10 companies? This will remove companies you added later.",
@@ -356,35 +594,55 @@ function App() {
     ) {
       return;
     }
-    setCompanies(INITIAL_COMPANIES.map((company) => ({ ...company })));
+    let resetData = INITIAL_COMPANIES.map((company) => ({ ...company }));
+    if (user) {
+      const result = await runCloudMutation(() =>
+        resetUserCompanies(user.id, INITIAL_COMPANIES),
+      );
+      if (!result.ok) return;
+      resetData = result.value;
+    }
+    setCompanies(resetData);
     setMessage("Reset to your current 10 companies.");
   }
 
-  function addQuestion(event) {
+  async function addQuestion(event) {
     event.preventDefault();
     const cleanQuestion = question.trim();
     if (!cleanQuestion || !questionCompany || !questionTopic || !questionRound) {
       return;
     }
-    setQuestions((current) => [
-      ...current,
-      {
-        question: cleanQuestion,
-        company: questionCompany,
-        topic: questionTopic,
-        round: questionRound,
-      },
-    ]);
+    const newQuestion = {
+      question: cleanQuestion,
+      company: questionCompany,
+      topic: questionTopic,
+      round: questionRound,
+    };
+    let savedQuestion = newQuestion;
+    if (user) {
+      const result = await runCloudMutation(() =>
+        createQuestion(user.id, newQuestion),
+      );
+      if (!result.ok) return;
+      savedQuestion = result.value;
+    }
+    setQuestions((current) => [...current, savedQuestion]);
     setQuestion("");
     setQuestionTopic("");
     setQuestionRound("");
   }
 
-  function editQuestion(index) {
+  async function editQuestion(index) {
     const item = questions[index];
     if (!item) return;
     const updated = window.prompt("Edit interview question:", item.question);
     if (updated === null || !updated.trim()) return;
+    if (user && item.id) {
+      const result = await runCloudMutation(() =>
+        updateQuestion(item.id, { question: updated.trim() }),
+      );
+      if (!result.ok) return;
+    }
     setQuestions((current) =>
       current.map((questionItem, itemIndex) =>
         itemIndex === index
@@ -394,12 +652,19 @@ function App() {
     );
   }
 
-  function deleteQuestion(index) {
+  async function deleteQuestion(index) {
     if (!window.confirm("Delete this interview question?")) return;
+    const item = questions[index];
+    if (user && item?.id) {
+      const result = await runCloudMutation(() =>
+        deleteQuestionRemote(item.id),
+      );
+      if (!result.ok) return;
+    }
     setQuestions((current) => current.filter((_, itemIndex) => itemIndex !== index));
   }
 
-  function addSkill(event) {
+  async function addSkill(event) {
     event.preventDefault();
     const name = skillName.trim();
     if (!name || !skillCategory) return;
@@ -410,61 +675,174 @@ function App() {
     ) {
       return;
     }
-    setSkills((current) => [
-      ...current,
-      { name, category: skillCategory, status: skillStatus },
-    ]);
+    const newSkill = { name, category: skillCategory, status: skillStatus };
+    let savedSkill = newSkill;
+    if (user) {
+      const result = await runCloudMutation(() =>
+        createSkill(user.id, newSkill),
+      );
+      if (!result.ok) return;
+      savedSkill = result.value;
+    }
+    setSkills((current) => [...current, savedSkill]);
     setSkillName("");
     setSkillCategory("");
     setSkillStatus(SKILL_STATUSES[0]);
   }
 
-  function updateSkill(index) {
+  async function updateSkill(index) {
+    const skill = skills[index];
+    if (!skill) return;
+    const status =
+      SKILL_STATUSES[
+        (SKILL_STATUSES.indexOf(skill.status) + 1) % SKILL_STATUSES.length
+      ];
+    if (user && skill.id) {
+      const result = await runCloudMutation(() =>
+        updateSkillRemote(skill.id, { status }),
+      );
+      if (!result.ok) return;
+    }
     setSkills((current) =>
       current.map((skill, skillIndex) =>
         skillIndex === index
-          ? {
-              ...skill,
-              status:
-                SKILL_STATUSES[
-                  (SKILL_STATUSES.indexOf(skill.status) + 1) %
-                    SKILL_STATUSES.length
-                ],
-            }
+          ? { ...skill, status }
           : skill,
       ),
     );
   }
 
-  function deleteSkill(index) {
+  async function deleteSkill(index) {
     const skill = skills[index];
     if (!skill || !window.confirm(`Delete "${skill.name}" from your skills?`)) {
       return;
     }
+    if (user && skill.id) {
+      const result = await runCloudMutation(() =>
+        deleteSkillRemote(skill.id),
+      );
+      if (!result.ok) return;
+    }
     setSkills((current) => current.filter((_, skillIndex) => skillIndex !== index));
   }
 
-  function addMotivation() {
+  async function addMotivation() {
     const line = window.prompt("Write your motivation line:");
     if (line === null || !line.trim()) return;
-    setMotivations((current) => [...current, line.trim()]);
+    let savedLine = line.trim();
+    if (user) {
+      const result = await runCloudMutation(() =>
+        createMotivation(user.id, savedLine),
+      );
+      if (!result.ok) return;
+      savedLine = result.value;
+    }
+    setMotivations((current) => [...current, savedLine]);
   }
 
-  function editMotivation(index) {
-    const line = motivations[index];
+  async function editMotivation(index) {
+    const item = motivations[index];
+    const line = typeof item === "string" ? item : item.line;
     const updated = window.prompt("Edit your motivation line:", line);
     if (updated === null || !updated.trim()) return;
+    if (user && typeof item !== "string" && item.id) {
+      const result = await runCloudMutation(() =>
+        updateMotivation(item.id, updated.trim()),
+      );
+      if (!result.ok) return;
+    }
     setMotivations((current) =>
       current.map((item, itemIndex) =>
-        itemIndex === index ? updated.trim() : item,
+        itemIndex === index
+          ? typeof item === "string"
+            ? updated.trim()
+            : { ...item, line: updated.trim() }
+          : item,
       ),
     );
   }
 
-  function deleteMotivation(index) {
+  async function deleteMotivation(index) {
     if (!window.confirm("Delete this motivation line?")) return;
+    const item = motivations[index];
+    if (user && typeof item !== "string" && item?.id) {
+      const result = await runCloudMutation(() =>
+        deleteMotivationRemote(item.id),
+      );
+      if (!result.ok) return;
+    }
     setMotivations((current) =>
       current.filter((_, itemIndex) => itemIndex !== index),
+    );
+  }
+
+  async function importLocalData() {
+    const backup = legacyData.current;
+    const total =
+      backup.companies.length +
+      backup.questions.length +
+      backup.skills.length +
+      backup.motivations.length;
+    if (
+      !window.confirm(
+        `Import browser data (${backup.companies.length} companies, ${backup.questions.length} questions, ${backup.skills.length} skills, and ${backup.motivations.length} motivation lines)? Repeating the import updates matching imported entries.`,
+      )
+    ) {
+      return;
+    }
+    if (!total) return;
+
+    const result = await runCloudMutation(() =>
+      importBrowserData(user.id, backup),
+    );
+    if (!result.ok) return;
+    setCompanies(result.value.companies);
+    setQuestions(result.value.questions);
+    setSkills(result.value.skills);
+    setMotivations(result.value.motivations);
+    setMessage("Browser data imported to your account.");
+  }
+
+  async function signOut() {
+    const { error } = await supabase.auth.signOut();
+    if (error) setMessage(`Could not sign out: ${error.message}`);
+  }
+
+  if (supabase && authLoading) {
+    return <main className="auth-page"><p>Checking your sign-in...</p></main>;
+  }
+
+  if (supabase && !user) {
+    return (
+      <>
+        <AuthScreen />
+        {cloudError && <p className="auth-error">{cloudError}</p>}
+      </>
+    );
+  }
+
+  if (supabase && cloudLoading) {
+    return <main className="auth-page"><p>Loading your saved job hunt...</p></main>;
+  }
+
+  if (supabase && cloudError) {
+    return (
+      <main className="auth-page">
+        <section className="auth-card">
+          <h1>Couldn’t load your data</h1>
+          <p role="alert">{cloudError}</p>
+          <button
+            className="add-btn"
+            type="button"
+            onClick={() => setCloudReload((current) => current + 1)}
+          >
+            Try again
+          </button>
+          <button className="auth-toggle" type="button" onClick={signOut}>
+            Sign out
+          </button>
+        </section>
+      </main>
     );
   }
 
@@ -479,7 +857,22 @@ function App() {
           <strong>{companies.length} / 100</strong>
           <span>companies</span>
         </div>
+        {user && (
+          <div className="account-actions">
+            <span>{user.email}</span>
+            <button className="secondary" type="button" onClick={signOut}>
+              Sign out
+            </button>
+          </div>
+        )}
       </header>
+
+      {!supabase && (
+        <div className="setup-notice" role="status">
+          Local-only mode: add your Supabase project URL and public key to enable
+          accounts and cloud sync.
+        </div>
+      )}
 
       <div
         className="progress"
@@ -518,16 +911,32 @@ function App() {
             />
           </label>
           <button className="add-btn" type="submit">
-            + Add Company
+            {saving ? "Saving..." : "+ Add Company"}
           </button>
         </form>
         <div className="message" aria-live="polite">
           {message}
         </div>
         <div className="saved-state">
-          ✓ Your companies are saved in this browser
+          {user
+            ? `✓ Data synced to your account (${user.email})`
+            : "✓ Your data is saved in this browser"}
         </div>
       </section>
+
+      {user && (
+        <div className="import-row">
+          <p>Have data saved in this browser? Import it into your account.</p>
+          <button
+            className="secondary"
+            type="button"
+            onClick={importLocalData}
+            disabled={saving}
+          >
+            {saving ? "Importing..." : "Import browser data"}
+          </button>
+        </div>
+      )}
 
       <section className="stacks" aria-label="Company application statuses">
         {STATUSES.map((status) => (
@@ -801,7 +1210,9 @@ function App() {
         />
         <div className="motivation-list">
           {motivations.length ? (
-            motivations.map((line, index) => (
+            motivations.map((item, index) => {
+              const line = typeof item === "string" ? item : item.line;
+              return (
               <div className="motivation-item" key={`${index}-${line}`}>
                 <span>{line}</span>
                 <div className="motivation-actions">
@@ -825,7 +1236,8 @@ function App() {
                   </button>
                 </div>
               </div>
-            ))
+              );
+            })
           ) : (
             <div className="motivation-empty">
               No motivation lines yet. Add your first one above ✨
