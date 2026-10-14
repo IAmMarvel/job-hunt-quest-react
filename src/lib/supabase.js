@@ -155,13 +155,17 @@ export async function importBrowserData(userId, data) {
     },
   ];
 
-  for (const batch of batches) {
-    if (batch.rows.length) {
-      unwrap(await supabase
-          .from(batch.table)
-          .upsert(batch.rows, { onConflict: "user_id,legacy_id" }));
-    }
-  }
+  await Promise.all(
+    batches
+      .filter((batch) => batch.rows.length > 0)
+      .map(async (batch) => {
+        unwrap(
+          await supabase
+            .from(batch.table)
+            .upsert(batch.rows, { onConflict: "user_id,legacy_id" }),
+        );
+      }),
+  );
 
   return fetchUserData();
 }

@@ -546,7 +546,6 @@ function App() {
     setCloudLoading(true);
     setCloudError("");
     async function loadAndSyncData() {
-      const data = await fetchUserData();
       const backup = legacyData.current;
       const hasBrowserData =
         backup.companies.length +
@@ -563,17 +562,14 @@ function App() {
         console.warn("Could not check browser data sync status:", error);
       }
 
+      let data;
       if (!browserDataImported) {
-        let syncedData = data;
         if (hasBrowserData) {
-          setSaving(true);
-          syncedData = await importBrowserData(user.id, backup);
+          data = await importBrowserData(user.id, backup);
+        } else {
+          data = await fetchUserData();
         }
         if (!active) return;
-        setCompanies(syncedData.companies);
-        setQuestions(syncedData.questions);
-        setSkills(syncedData.skills);
-        setMotivations(syncedData.motivations);
         try {
           localStorage.setItem(importKey, "1");
         } catch (error) {
@@ -582,7 +578,8 @@ function App() {
         if (hasBrowserData) {
           setMessage("Browser data synced to your account.");
         }
-        return;
+      } else {
+        data = await fetchUserData();
       }
 
       if (!active) return;
