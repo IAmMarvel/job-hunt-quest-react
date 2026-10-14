@@ -175,8 +175,20 @@ function AuthScreen() {
   const [creatingAccount, setCreatingAccount] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [authMessage, setAuthMessage] = useState("");
+  const [authMessage, setAuthMessage] = useState(() =>
+    new URLSearchParams(window.location.search).get("confirmed") === "1"
+      ? "Email confirmed. Please sign in."
+      : "",
+  );
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    if (url.searchParams.has("confirmed")) {
+      url.searchParams.delete("confirmed");
+      window.history.replaceState(null, "", url);
+    }
+  }, []);
 
   async function submit(event) {
     event.preventDefault();
@@ -185,7 +197,16 @@ function AuthScreen() {
 
     try {
       const result = creatingAccount
-        ? await supabase.auth.signUp({ email: email.trim(), password })
+        ? await supabase.auth.signUp({
+            email: email.trim(),
+            password,
+            options: {
+              emailRedirectTo: new URL(
+                import.meta.env.BASE_URL,
+                window.location.origin,
+              ).toString(),
+            },
+          })
         : await supabase.auth.signInWithPassword({
             email: email.trim(),
             password,
@@ -373,21 +394,30 @@ function App() {
     if (!supabase) return undefined;
     let active = true;
 
-    supabase.auth.getSession().then(({ data, error }) => {
-      if (!active) return;
-      if (error) setCloudError(error.message);
-      if (data?.session) setCloudLoading(true);
-      setSession(data?.session ?? null);
+    let awaitingSignupConfirmation =
+      new URLSearchParams(window.location.hash.slice(1)).get("type") ===
+      "signup";
+    function returnToLoginAfterConfirmation() {
+      if (!awaitingSignupConfirmation) return false;
+      awaitingSignupConfirmation = false;
+      const loginUrl = new URL(import.meta.env.BASE_URL, window.location.origin);
+      loginUrl.searchParams.set("confirmed", "1");
+      window.history.replaceState(null, "", loginUrl);
+      setSession(null);
+      setCloudLoading(false);
       setAuthLoading(false);
-    }).catch((error) => {
-      if (!active) return;
-      setCloudError(error.message || "Could not restore your sign-in session.");
-      setAuthLoading(false);
-    });
+      window.setTimeout(() => {
+        supabase.auth.signOut().catch((error) => {
+          setCloudError(error.message || "Could not complete email confirmation.");
+        });
+      }, 0);
+      return true;
+    }
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, nextSession) => {
+    } = supabase.auth.onAuthStateChange((event, nextSession) => {
+      if (event === "SIGNED_IN" && returnToLoginAfterConfirmation()) return;
       setSession(nextSession);
       if (!nextSession) {
         setCloudLoading(false);
@@ -396,6 +426,19 @@ function App() {
         setSkills([]);
         setMotivations([]);
       }
+    });
+
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (!active) return;
+      if (error) setCloudError(error.message);
+      if (data?.session && returnToLoginAfterConfirmation()) return;
+      if (data?.session) setCloudLoading(true);
+      setSession(data?.session ?? null);
+      setAuthLoading(false);
+    }).catch((error) => {
+      if (!active) return;
+      setCloudError(error.message || "Could not restore your sign-in session.");
+      setAuthLoading(false);
     });
 
     return () => {
