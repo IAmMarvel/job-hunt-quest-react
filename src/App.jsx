@@ -176,6 +176,7 @@ function AuthScreen() {
   const [creatingAccount, setCreatingAccount] = useState(false);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [authMessage, setAuthMessage] = useState(() =>
     new URLSearchParams(window.location.search).get("confirmed") === "1"
       ? "Email confirmed. Please sign in."
@@ -227,41 +228,88 @@ function AuthScreen() {
     <main className="auth-page">
       <section className="auth-card">
         <div className="eyebrow">JOB HUNT QUEST</div>
-        <h1>{creatingAccount ? "Create your account" : "Welcome back"}</h1>
+        <h1 className="auth-title">
+          {creatingAccount ? "Create your account" : "Welcome back"}
+          <svg
+            className="auth-sprout"
+            viewBox="0 0 64 64"
+            fill="none"
+            aria-hidden="true"
+          >
+            <path d="M30 54c1-17 1-27-7-38" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+            <path d="M28 30C14 29 8 20 9 10c13 0 21 6 21 19M31 40c2-15 10-21 24-21 0 12-6 21-24 24" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="m49 6 3-4m5 11 5-2m-5 10 5 2" stroke="#ed8f83" strokeWidth="3" strokeLinecap="round" />
+          </svg>
+        </h1>
         <p>Sign in to keep your job hunt data synced across devices.</p>
         <form className="auth-form" onSubmit={submit}>
-          <label>
-            Email
-            <input
-              type="email"
-              autoComplete="email"
-              required
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-            />
+          <label className="auth-field">
+            <span>Email</span>
+            <span className="auth-input-wrap">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" strokeWidth="2" />
+                <path d="m4 7 8 6 8-6" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+              </svg>
+              <input
+                type="email"
+                autoComplete="email"
+                required
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+              />
+            </span>
           </label>
-          <label>
-            Password
-            <input
-              type="password"
-              autoComplete={creatingAccount ? "new-password" : "current-password"}
-              minLength="8"
-              required
-              value={password}
-              onChange={(event) => setPassword(event.target.value)}
-            />
+          <label className="auth-field">
+            <span>Password</span>
+            <span className="auth-input-wrap">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="5" y="10" width="14" height="11" rx="2" stroke="currentColor" strokeWidth="2" />
+                <path d="M8 10V7a4 4 0 1 1 8 0v3m-4 4v3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+              </svg>
+              <input
+                type={showPassword ? "text" : "password"}
+                autoComplete={creatingAccount ? "new-password" : "current-password"}
+                minLength="8"
+                required
+                value={password}
+                onChange={(event) => setPassword(event.target.value)}
+              />
+              <button
+                className="password-toggle"
+                type="button"
+                onClick={() => setShowPassword((visible) => !visible)}
+                aria-label={showPassword ? "Hide password" : "Show password"}
+                title={showPassword ? "Hide password" : "Show password"}
+              >
+                {showPassword ? (
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M3 3l18 18M10.6 10.6a2 2 0 0 0 2.8 2.8M9.9 5.2A10.8 10.8 0 0 1 12 5c5 0 8.5 4.5 9 7-.2 1.1-1.1 2.5-2.5 3.7M6.2 6.2C3.8 7.7 2.4 10.3 2 12c.5 2.5 4 7 10 7 1 0 2-.2 2.9-.5" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12Z" stroke="currentColor" strokeWidth="2" />
+                    <circle cx="12" cy="12" r="3" stroke="currentColor" strokeWidth="2" />
+                    <path d="m3 3 18 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                  </svg>
+                )}
+              </button>
+            </span>
           </label>
-          <button className="add-btn" type="submit" disabled={busy}>
-            {busy
-              ? "Please wait..."
-              : creatingAccount
-                ? "Create account"
-                : "Sign in"}
+          <button className="auth-submit" type="submit" disabled={busy}>
+            <span>
+              {busy
+                ? "Please wait..."
+                : creatingAccount
+                  ? "Create account"
+                  : "Sign in"}
+            </span>
+            <span aria-hidden="true">→</span>
           </button>
         </form>
         <div className="message" role="status" aria-live="polite">
           {authMessage}
         </div>
+        <div className="auth-divider"><span>OR</span></div>
         <button
           className="auth-toggle"
           type="button"
@@ -270,9 +318,11 @@ function AuthScreen() {
             setAuthMessage("");
           }}
         >
-          {creatingAccount
-            ? "Already have an account? Sign in"
-            : "New here? Create an account"}
+          {creatingAccount ? (
+            <>Already have an account? <strong>Sign in</strong></>
+          ) : (
+            <>New here? <strong>Create an account</strong></>
+          )}
         </button>
       </section>
     </main>
