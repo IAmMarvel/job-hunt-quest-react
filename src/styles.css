@@ -645,6 +645,82 @@ textarea:focus {
   backdrop-filter: blur(12px);
 }
 
+.auth-loading-card {
+  width: min(100%, 360px);
+  padding: 28px;
+}
+
+.cat-loader {
+  display: flex;
+  min-height: 100px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: #315a47;
+  font-size: 14px;
+  font-weight: 650;
+  text-align: center;
+}
+
+.loading-cat {
+  width: 72px;
+  height: 54px;
+  overflow: visible;
+  animation: cat-bob 0.8s ease-in-out infinite alternate;
+}
+
+.cat-tail {
+  transform-box: fill-box;
+  transform-origin: right center;
+  animation: cat-tail-wag 0.65s ease-in-out infinite alternate;
+}
+
+.cat-loader.compact {
+  min-height: 0;
+  flex-direction: row;
+  justify-content: center;
+  gap: 8px;
+  color: inherit;
+  font-size: 14px;
+  white-space: nowrap;
+}
+
+.cat-loader.compact .loading-cat {
+  width: 38px;
+  height: 30px;
+}
+
+.save-loading {
+  position: fixed;
+  z-index: 20;
+  right: 20px;
+  bottom: 20px;
+  padding: 10px 16px;
+  border: 1px solid rgb(255 255 255 / 75%);
+  border-radius: 16px;
+  background: rgb(255 255 255 / 94%);
+  box-shadow: 0 8px 28px #20252224;
+  backdrop-filter: blur(10px);
+}
+
+@keyframes cat-bob {
+  from { transform: translateY(2px) rotate(-2deg); }
+  to { transform: translateY(-3px) rotate(2deg); }
+}
+
+@keyframes cat-tail-wag {
+  from { transform: rotate(-12deg); }
+  to { transform: rotate(16deg); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-cat,
+  .cat-tail {
+    animation: none;
+  }
+}
+
 .auth-card h1 {
   margin: 12px 0 0;
   font-size: 32px;
@@ -818,6 +894,11 @@ textarea:focus {
 
   .auth-card {
     padding: 28px 22px 20px;
+  }
+
+  .save-loading {
+    right: 12px;
+    bottom: 12px;
   }
 
   .auth-card h1 {

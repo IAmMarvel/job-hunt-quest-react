@@ -172,6 +172,42 @@ function usePersistentState(key, initializer, persistLocally) {
   return [value, setValue];
 }
 
+function CatLoader({ label, compact = false }) {
+  return (
+    <span
+      className={`cat-loader${compact ? " compact" : ""}`}
+      role="status"
+      aria-live="polite"
+    >
+      <svg className="loading-cat" viewBox="0 0 72 54" fill="none" aria-hidden="true">
+        <path
+          className="cat-tail"
+          d="M14 39C4 38 5 25 13 25c5 0 5 5 2 7"
+          stroke="currentColor"
+          strokeWidth="4"
+          strokeLinecap="round"
+        />
+        <path
+          d="M17 32c0-9 8-15 19-15s19 6 19 15v8H17v-8Z"
+          fill="currentColor"
+        />
+        <path
+          d="m22 21-1-11 11 7m13 4 2-11-11 7"
+          fill="currentColor"
+          stroke="currentColor"
+          strokeWidth="3"
+          strokeLinejoin="round"
+        />
+        <path d="M27 30h1m16 0h1" stroke="#fff9f2" strokeWidth="3" strokeLinecap="round" />
+        <path d="M34 35q2 2 4 0" stroke="#fff9f2" strokeWidth="2" strokeLinecap="round" />
+        <path d="M22 43v5m12-5v5m12-5v5" stroke="currentColor" strokeWidth="4" strokeLinecap="round" />
+        <path d="M8 49h56" stroke="#315a4730" strokeWidth="3" strokeLinecap="round" />
+      </svg>
+      <span className="cat-loader-label">{label}</span>
+    </span>
+  );
+}
+
 function AuthScreen() {
   const [creatingAccount, setCreatingAccount] = useState(false);
   const [email, setEmail] = useState("");
@@ -297,13 +333,15 @@ function AuthScreen() {
           </label>
           <button className="auth-submit" type="submit" disabled={busy}>
             <span>
-              {busy
-                ? "Please wait..."
-                : creatingAccount
-                  ? "Create account"
-                  : "Sign in"}
+              {busy ? (
+                <CatLoader label="Please wait..." compact />
+              ) : creatingAccount ? (
+                "Create account"
+              ) : (
+                "Sign in"
+              )}
             </span>
-            <span aria-hidden="true">→</span>
+            {!busy && <span aria-hidden="true">→</span>}
           </button>
         </form>
         <div className="message" role="status" aria-live="polite">
@@ -912,7 +950,13 @@ function App() {
   }
 
   if (supabase && authLoading) {
-    return <main className="auth-page"><p>Checking your sign-in...</p></main>;
+    return (
+      <main className="auth-page">
+        <section className="auth-card auth-loading-card">
+          <CatLoader label="Checking your sign-in..." />
+        </section>
+      </main>
+    );
   }
 
   if (supabase && !user) {
@@ -925,7 +969,13 @@ function App() {
   }
 
   if (supabase && cloudLoading) {
-    return <main className="auth-page"><p>Loading your saved job hunt...</p></main>;
+    return (
+      <main className="auth-page">
+        <section className="auth-card auth-loading-card">
+          <CatLoader label="Loading your saved job hunt..." />
+        </section>
+      </main>
+    );
   }
 
   if (supabase && cloudError) {
@@ -969,6 +1019,12 @@ function App() {
           </div>
         )}
       </header>
+
+      {saving && (
+        <div className="save-loading">
+          <CatLoader label="Saving your changes..." compact />
+        </div>
+      )}
 
       {!supabase && (
         <div className="setup-notice" role="status">
