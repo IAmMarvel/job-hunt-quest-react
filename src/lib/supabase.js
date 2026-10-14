@@ -3,8 +3,43 @@ import { createClient } from "@supabase/supabase-js";
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
+async function fetchWithSignInTimeout(input, init) {
+  const requestUrl = input instanceof Request ? input.url : String(input);
+  if (
+    !requestUrl.includes("/auth/v1/token") ||
+    !requestUrl.includes("grant_type=password")
+  ) {
+    return fetch(input, init);
+  }
+
+  const controller = new AbortController();
+  const originalSignal =
+    init?.signal ?? (input instanceof Request ? input.signal : undefined);
+  const abortRequest = () => controller.abort(originalSignal?.reason);
+  if (originalSignal?.aborted) {
+    abortRequest();
+  } else {
+    originalSignal?.addEventListener("abort", abortRequest, { once: true });
+  }
+  const timeout = window.setTimeout(
+    () => controller.abort(new DOMException("Sign-in request timed out.", "TimeoutError")),
+    10_000,
+  );
+
+  try {
+    return await fetch(input, { ...init, signal: controller.signal });
+  } finally {
+    window.clearTimeout(timeout);
+    originalSignal?.removeEventListener("abort", abortRequest);
+  }
+}
+
 export const supabase =
-  supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+  supabaseUrl && supabaseKey
+    ? createClient(supabaseUrl, supabaseKey, {
+        global: { fetch: fetchWithSignInTimeout },
+      })
+    : null;
 
 const TABLES = {
   companies: "companies",

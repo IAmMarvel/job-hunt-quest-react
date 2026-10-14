@@ -292,6 +292,11 @@ function AuthScreen() {
     event.preventDefault();
     setBusy(true);
     setAuthMessage("");
+    const slowSignInNotice = creatingAccount
+      ? null
+      : window.setTimeout(() => {
+          setAuthMessage("Still connecting to the sign-in service...");
+        }, 4000);
 
     try {
       const result = creatingAccount
@@ -314,8 +319,16 @@ function AuthScreen() {
         setAuthMessage("Account created. Check your email to confirm your address, then sign in.");
       }
     } catch (error) {
-      setAuthMessage(error.message || "Authentication failed. Please try again.");
+      const errorMessage = error.message || "Authentication failed. Please try again.";
+      setAuthMessage(
+        errorMessage.includes("Sign-in request timed out")
+          ? "Sign-in timed out while waiting for Supabase. Check your connection and try again."
+          : errorMessage,
+      );
     } finally {
+      if (slowSignInNotice !== null) {
+        window.clearTimeout(slowSignInNotice);
+      }
       setBusy(false);
     }
   }
