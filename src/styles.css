@@ -630,15 +630,19 @@ textarea:focus {
   min-height: 100vh;
   place-items: center;
   padding: 24px;
+  background:
+    linear-gradient(135deg, rgb(255 247 237 / 28%), rgb(255 236 221 / 12%)),
+    url("./assets/cozy-sunset-study.jpg") center / cover no-repeat;
 }
 
 .auth-card {
   width: min(100%, 440px);
   padding: 28px;
-  border: 1px solid var(--border);
+  border: 1px solid rgb(255 255 255 / 70%);
   border-radius: 18px;
-  background: var(--card);
-  box-shadow: 0 12px 36px #2025220d;
+  background: rgb(255 255 255 / 92%);
+  box-shadow: 0 12px 36px #51391f26;
+  backdrop-filter: blur(12px);
 }
 
 .auth-card h1 {
