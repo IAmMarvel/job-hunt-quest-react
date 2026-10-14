@@ -611,8 +611,7 @@ textarea:focus {
   font-size: 13px;
 }
 
-.setup-notice,
-.import-row {
+.setup-notice {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -624,17 +623,6 @@ textarea:focus {
   background: #fff9df;
   color: #67561e;
   font-size: 13px;
-}
-
-.import-row {
-  margin-top: -12px;
-  border-color: var(--border);
-  background: #fff;
-  color: var(--text);
-}
-
-.import-row p {
-  margin: 0;
 }
 
 .auth-page {
@@ -750,8 +738,7 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
-  .setup-notice,
-  .import-row {
+  .setup-notice {
     align-items: flex-start;
     flex-direction: column;
   }

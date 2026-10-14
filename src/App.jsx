@@ -23,6 +23,7 @@ const STORAGE_KEYS = {
   motivations: "job-hunt-quest-motivations-v1",
   skills: "job-hunt-quest-skills-v1",
 };
+const BROWSER_IMPORT_KEY = "job-hunt-quest-browser-import-v1";
 
 const STATUSES = ["selected", "running", "pending", "rejected"];
 const NEXT_STATUS = {
@@ -97,7 +98,7 @@ function loadFromStorage(key, validate, fallback) {
   }
 }
 
-function loadCompanies() {
+function loadCompanies(fallback = INITIAL_COMPANIES) {
   return loadFromStorage(
     STORAGE_KEYS.companies,
     (company) =>
@@ -105,7 +106,7 @@ function loadCompanies() {
       Number.isFinite(Number(company.id)) &&
       typeof company.name === "string" &&
       STATUSES.includes(company.status),
-    INITIAL_COMPANIES,
+    fallback,
   )
     .map((company) => ({
       id: Number(company.id),
@@ -381,7 +382,7 @@ function App() {
 
   if (!legacyData.current) {
     legacyData.current = {
-      companies: loadCompanies(),
+      companies: loadCompanies([]),
       questions: loadQuestions(),
       skills: loadSkills(),
       motivations: loadMotivations(),
@@ -456,21 +457,64 @@ function App() {
     let active = true;
     setCloudLoading(true);
     setCloudError("");
-    fetchUserData()
-      .then((data) => {
+    async function loadAndSyncData() {
+      const data = await fetchUserData();
+      const backup = legacyData.current;
+      const hasBrowserData =
+        backup.companies.length +
+        backup.questions.length +
+        backup.skills.length +
+        backup.motivations.length >
+        0;
+      const importKey = `${BROWSER_IMPORT_KEY}:${user.id}`;
+      let browserDataImported = false;
+
+      try {
+        browserDataImported = localStorage.getItem(importKey) === "1";
+      } catch (error) {
+        console.warn("Could not check browser data sync status:", error);
+      }
+
+      if (!browserDataImported) {
+        let syncedData = data;
+        if (hasBrowserData) {
+          setSaving(true);
+          syncedData = await importBrowserData(user.id, backup);
+        }
         if (!active) return;
-        setCompanies(data.companies);
-        setQuestions(data.questions);
-        setSkills(data.skills);
-        setMotivations(data.motivations);
-      })
+        setCompanies(syncedData.companies);
+        setQuestions(syncedData.questions);
+        setSkills(syncedData.skills);
+        setMotivations(syncedData.motivations);
+        try {
+          localStorage.setItem(importKey, "1");
+        } catch (error) {
+          console.warn("Could not save browser data sync status:", error);
+        }
+        if (hasBrowserData) {
+          setMessage("Browser data synced to your account.");
+        }
+        return;
+      }
+
+      if (!active) return;
+      setCompanies(data.companies);
+      setQuestions(data.questions);
+      setSkills(data.skills);
+      setMotivations(data.motivations);
+    }
+
+    loadAndSyncData()
       .catch((error) => {
         if (active) {
           setCloudError(error.message || "Could not load your saved data.");
         }
       })
       .finally(() => {
-        if (active) setCloudLoading(false);
+        if (active) {
+          setCloudLoading(false);
+          setSaving(false);
+        }
       });
 
     return () => {
@@ -812,33 +856,6 @@ function App() {
     );
   }
 
-  async function importLocalData() {
-    const backup = legacyData.current;
-    const total =
-      backup.companies.length +
-      backup.questions.length +
-      backup.skills.length +
-      backup.motivations.length;
-    if (
-      !window.confirm(
-        `Copy browser-saved data to your account (${backup.companies.length} companies, ${backup.questions.length} questions, ${backup.skills.length} skills, and ${backup.motivations.length} motivation lines)? Companies with a matching name are skipped; repeating the import updates entries previously imported from this browser.`,
-      )
-    ) {
-      return;
-    }
-    if (!total) return;
-
-    const result = await runCloudMutation(() =>
-      importBrowserData(user.id, backup),
-    );
-    if (!result.ok) return;
-    setCompanies(result.value.companies);
-    setQuestions(result.value.questions);
-    setSkills(result.value.skills);
-    setMotivations(result.value.motivations);
-    setMessage("Browser data imported to your account.");
-  }
-
   async function signOut() {
     const { error } = await supabase.auth.signOut();
     if (error) setMessage(`Could not sign out: ${error.message}`);
@@ -967,20 +984,6 @@ function App() {
             : "✓ Your data is saved in this browser"}
         </div>
       </section>
-
-      {user && (
-        <div className="import-row">
-          <p>Copy data saved in this browser to your account. Existing companies with the same name are skipped.</p>
-          <button
-            className="secondary"
-            type="button"
-            onClick={importLocalData}
-            disabled={saving}
-          >
-            {saving ? "Importing..." : "Import browser data"}
-          </button>
-        </div>
-      )}
 
       <section className="stacks" aria-label="Company application statuses">
         {STATUSES.map((status) => (

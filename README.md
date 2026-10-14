@@ -18,7 +18,7 @@ Create a production build with `npm run build`, then use `npm run preview` to pr
 3. In Supabase Authentication URL Configuration, set the Site URL to `https://iammarvel.github.io/job-hunt-quest-react/` and add both that URL and `http://localhost:5173` as allowed redirect URLs. Sign-up confirmation links return to the app’s login screen.
 4. Restart `npm run dev`. The sign-in and account creation screen will appear once both environment values are set.
 5. In the GitHub repository's **Settings → Secrets and variables → Actions → Variables**, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Push to `main` to deploy the cloud-enabled app.
-6. Sign up or sign in, then choose **Import browser data** to copy data previously stored in this browser. Existing companies with the same name are skipped, and repeating the import updates entries previously imported from this browser.
+6. Sign up or sign in. Data previously saved in this browser is merged into the account automatically once per account and browser; existing companies with the same name are skipped. New signed-in changes sync immediately.
 
 To remove company duplicates already stored in Supabase, run [`supabase/dedupe_companies.sql`](./supabase/dedupe_companies.sql) once in the Supabase SQL Editor. It keeps the oldest entry for each company name per account (ignoring capitalization and surrounding spaces) and deletes the rest.
 
