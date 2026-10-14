@@ -245,8 +245,8 @@ textarea:focus {
 }
 
 .deck.ai-interview {
-  border-color: #8b82c5;
-  background: #f1efff;
+  border-color: #e879a9;
+  background: #fff0f6;
 }
 
 .deck.drag-over {
@@ -296,7 +296,7 @@ textarea:focus {
 }
 
 .ai-interview .company {
-  background: #c9c2f2;
+  background: #f4b8d0;
 }
 
 .company-move {
