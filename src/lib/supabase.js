@@ -37,7 +37,10 @@ async function deleteRow(table, id) {
 
 export async function fetchUserData() {
   const [companies, questions, skills, motivations] = await Promise.all([
-    supabase.from(TABLES.companies).select("id,name,rounds,status").order("created_at"),
+    supabase
+      .from(TABLES.companies)
+      .select("id,name,rounds,status,is_ai_interview")
+      .order("created_at"),
     supabase
       .from(TABLES.questions)
       .select("id,question,company,topic,round")
@@ -84,16 +87,42 @@ export const updateMotivation = (id, line) =>
 export const deleteMotivation = (id) => deleteRow(TABLES.motivations, id);
 
 export async function importBrowserData(userId, data) {
+  const existingCompanies = unwrap(
+    await supabase
+      .from(TABLES.companies)
+      .select("name,legacy_id")
+      .eq("user_id", userId),
+  );
+  const knownCompanyNames = new Set(
+    existingCompanies.map((company) => company.name.trim().toLocaleLowerCase()),
+  );
+  const knownCompanyLegacyIds = new Set(
+    existingCompanies
+      .map((company) => company.legacy_id)
+      .filter((legacyId) => legacyId != null),
+  );
+  const companyRows = data.companies
+    .map((company, index) => ({
+      user_id: userId,
+      legacy_id: `company:${company.id ?? index}`,
+      name: company.name,
+      rounds: company.rounds,
+      status: company.status,
+      is_ai_interview: company.is_ai_interview === true,
+    }))
+    .filter((company) => {
+      const name = company.name.trim().toLocaleLowerCase();
+      if (knownCompanyLegacyIds.has(company.legacy_id)) return true;
+      if (knownCompanyNames.has(name)) return false;
+      knownCompanyNames.add(name);
+      knownCompanyLegacyIds.add(company.legacy_id);
+      return true;
+    });
+
   const batches = [
     {
       table: TABLES.companies,
-      rows: data.companies.map((company, index) => ({
-        user_id: userId,
-        legacy_id: `company:${company.id ?? index}`,
-        name: company.name,
-        rounds: company.rounds,
-        status: company.status,
-      })),
+      rows: companyRows,
     },
     {
       table: TABLES.questions,
@@ -128,11 +157,9 @@ export async function importBrowserData(userId, data) {
 
   for (const batch of batches) {
     if (batch.rows.length) {
-      unwrap(
-        await supabase
+      unwrap(await supabase
           .from(batch.table)
-          .upsert(batch.rows, { onConflict: "user_id,legacy_id" }),
-      );
+          .upsert(batch.rows, { onConflict: "user_id,legacy_id" }));
     }
   }
 

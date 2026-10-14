@@ -106,12 +106,15 @@ function loadCompanies() {
       typeof company.name === "string" &&
       STATUSES.includes(company.status),
     INITIAL_COMPANIES,
-  ).map((company) => ({
-    id: Number(company.id),
-    name: company.name.trim(),
-    rounds: Math.max(1, Math.min(20, Number(company.rounds) || 1)),
-    status: company.status,
-  })).filter((company) => company.name);
+  )
+    .map((company) => ({
+      id: Number(company.id),
+      name: company.name.trim(),
+      rounds: Math.max(1, Math.min(20, Number(company.rounds) || 1)),
+      status: company.status,
+      is_ai_interview: company.is_ai_interview === true,
+    }))
+    .filter((company) => company.name);
 }
 
 function loadQuestions() {
@@ -332,6 +335,7 @@ function App() {
 
   const [companyName, setCompanyName] = useState("");
   const [interviewCount, setInterviewCount] = useState("1");
+  const [isAiInterview, setIsAiInterview] = useState(false);
   const [message, setMessage] = useState("");
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
@@ -453,6 +457,10 @@ function App() {
       ),
     [companies],
   );
+  const aiInterviewCompanies = useMemo(
+    () => companies.filter((company) => company.is_ai_interview),
+    [companies],
+  );
 
   const visibleSkills = useMemo(() => {
     const search = skillSearch.trim().toLowerCase();
@@ -485,7 +493,12 @@ function App() {
       return;
     }
 
-    const newCompany = { name, rounds, status: "running" };
+    const newCompany = {
+      name,
+      rounds,
+      status: "running",
+      is_ai_interview: isAiInterview,
+    };
     let savedCompany = {
       ...newCompany,
       id:
@@ -505,6 +518,7 @@ function App() {
     setMessage(`${name} added as Company #${companies.length + 1} 🟡`);
     setCompanyName("");
     setInterviewCount("1");
+    setIsAiInterview(false);
   }
 
   async function moveCompany(id, targetStatus) {
@@ -764,7 +778,7 @@ function App() {
       backup.motivations.length;
     if (
       !window.confirm(
-        `Import browser data (${backup.companies.length} companies, ${backup.questions.length} questions, ${backup.skills.length} skills, and ${backup.motivations.length} motivation lines)? Repeating the import updates matching imported entries.`,
+        `Copy browser-saved data to your account (${backup.companies.length} companies, ${backup.questions.length} questions, ${backup.skills.length} skills, and ${backup.motivations.length} motivation lines)? Companies with a matching name are skipped; repeating the import updates entries previously imported from this browser.`,
       )
     ) {
       return;
@@ -889,6 +903,14 @@ function App() {
               onChange={(event) => setInterviewCount(event.target.value)}
             />
           </label>
+          <label className="ai-interview-option">
+            <input
+              type="checkbox"
+              checked={isAiInterview}
+              onChange={(event) => setIsAiInterview(event.target.checked)}
+            />
+            AI interview
+          </label>
           <button className="add-btn" type="submit">
             {saving ? "Saving..." : "+ Add Company"}
           </button>
@@ -905,7 +927,7 @@ function App() {
 
       {user && (
         <div className="import-row">
-          <p>Have data saved in this browser? Import it into your account.</p>
+          <p>Copy data saved in this browser to your account. Existing companies with the same name are skipped.</p>
           <button
             className="secondary"
             type="button"
@@ -960,6 +982,34 @@ function App() {
             </div>
           </div>
         ))}
+        <div className="stack-wrap">
+          <div className="deck ai-interview" aria-label="AI interview companies">
+            {aiInterviewCompanies.length ? (
+              [...aiInterviewCompanies].reverse().map((company) => (
+                  <CompanyCard
+                    key={company.id}
+                    company={company}
+                    onMove={moveCompany}
+                    onEdit={editCompany}
+                    onDelete={deleteCompany}
+                    onDragStart={handleDragStart}
+                    onDragEnd={() => {
+                      setDraggedId(null);
+                      setDragOverStatus(null);
+                    }}
+                  />
+                ))
+            ) : (
+              <div className="empty">No AI interviews yet</div>
+            )}
+          </div>
+          <div className="label">
+            AI interview{" "}
+            <span className="count">
+              ({aiInterviewCompanies.length})
+            </span>
+          </div>
+        </div>
       </section>
       <p className="hint">
         Click a company card to move it: Running → Selected → Pending → Not

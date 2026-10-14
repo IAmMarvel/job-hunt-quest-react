@@ -5,9 +5,13 @@ create table if not exists public.companies (
   name text not null check (char_length(name) between 1 and 80),
   rounds integer not null check (rounds between 1 and 20),
   status text not null check (status in ('selected', 'running', 'pending', 'rejected')),
+  is_ai_interview boolean not null default false,
   created_at timestamptz not null default now(),
   unique (user_id, legacy_id)
 );
+
+alter table public.companies
+  add column if not exists is_ai_interview boolean not null default false;
 
 create table if not exists public.interview_questions (
   id uuid primary key default gen_random_uuid(),

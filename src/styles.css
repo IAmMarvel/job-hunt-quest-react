@@ -121,9 +121,24 @@ h1 {
 
 .company-form {
   display: grid;
-  grid-template-columns: 1fr 180px auto;
+  grid-template-columns: minmax(180px, 1fr) 180px auto auto;
   gap: 12px;
   align-items: end;
+}
+
+.ai-interview-option {
+  display: flex;
+  min-height: 48px;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.ai-interview-option input {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: #5b52a3;
 }
 
 label {
@@ -229,6 +244,11 @@ textarea:focus {
   background: #edf5fd;
 }
 
+.deck.ai-interview {
+  border-color: #8b82c5;
+  background: #f1efff;
+}
+
 .deck.drag-over {
   outline: 3px dashed #777;
   outline-offset: 3px;
@@ -273,6 +293,10 @@ textarea:focus {
 
 .rejected .company {
   background: #6ea8e8;
+}
+
+.ai-interview .company {
+  background: #c9c2f2;
 }
 
 .company-move {

@@ -18,7 +18,11 @@ Create a production build with `npm run build`, then use `npm run preview` to pr
 3. In Supabase Authentication URL Configuration, set the Site URL to `https://iammarvel.github.io/job-hunt-quest-react/` and add both that URL and `http://localhost:5173` as allowed redirect URLs.
 4. Restart `npm run dev`. The sign-in and account creation screen will appear once both environment values are set.
 5. In the GitHub repository's **Settings → Secrets and variables → Actions → Variables**, add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY`. Push to `main` to deploy the cloud-enabled app.
-6. Sign up or sign in, then choose **Import browser data** to copy data previously stored in this browser. The import is safe to repeat.
+6. Sign up or sign in, then choose **Import browser data** to copy data previously stored in this browser. Existing companies with the same name are skipped, and repeating the import updates entries previously imported from this browser.
+
+To remove company duplicates already stored in Supabase, run [`supabase/dedupe_companies.sql`](./supabase/dedupe_companies.sql) once in the Supabase SQL Editor. It keeps the oldest entry for each company name per account (ignoring capitalization and surrounding spaces) and deletes the rest.
+
+To enable the **AI interview** checkbox and stack for an existing Supabase project, run [`supabase/enable_ai_interview.sql`](./supabase/enable_ai_interview.sql) in the SQL Editor. New projects get this column when you run [`supabase/schema.sql`](./supabase/schema.sql).
 
 The frontend key is public by design; Row Level Security policies in the schema restrict every record to its owning authenticated user. Never add a Supabase service-role key to the frontend or GitHub Pages build.
 
