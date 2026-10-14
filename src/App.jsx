@@ -24,6 +24,7 @@ const STORAGE_KEYS = {
   skills: "job-hunt-quest-skills-v1",
 };
 const BROWSER_IMPORT_KEY = "job-hunt-quest-browser-import-v1";
+const USER_CACHE_KEY = "job-hunt-quest-user-cache-v1";
 
 const STATUSES = ["selected", "running", "pending", "rejected"];
 const NEXT_STATUS = {
@@ -154,6 +155,65 @@ function loadSkills() {
       SKILL_STATUSES.includes(skill.status),
     [],
   );
+}
+
+function loadUserDataCache(userId) {
+  try {
+    const cached = JSON.parse(
+      localStorage.getItem(`${USER_CACHE_KEY}:${userId}`),
+    );
+    const hasId = (item) =>
+      item &&
+      (typeof item.id === "string" ||
+        (typeof item.id === "number" && Number.isFinite(item.id)));
+    if (
+      !cached ||
+      !Array.isArray(cached.companies) ||
+      !Array.isArray(cached.questions) ||
+      !Array.isArray(cached.skills) ||
+      !Array.isArray(cached.motivations)
+    ) {
+      return null;
+    }
+
+    return {
+      companies: cached.companies.filter(
+        (item) =>
+          hasId(item) &&
+          typeof item.name === "string" &&
+          STATUSES.includes(item.status),
+      ),
+      questions: cached.questions.filter(
+        (item) =>
+          hasId(item) &&
+          typeof item.question === "string" &&
+          typeof item.company === "string" &&
+          typeof item.topic === "string" &&
+          typeof item.round === "string",
+      ),
+      skills: cached.skills.filter(
+        (item) =>
+          hasId(item) &&
+          typeof item.name === "string" &&
+          typeof item.category === "string" &&
+          SKILL_STATUSES.includes(item.status),
+      ),
+      motivations: cached.motivations.filter(
+        (item) => hasId(item) && typeof item.line === "string",
+      ),
+    };
+  } catch (error) {
+    console.warn("Could not restore cached account data:", error);
+    return null;
+  }
+}
+
+function saveUserDataCache(userId, data) {
+  try {
+    localStorage.setItem(`${USER_CACHE_KEY}:${userId}`, JSON.stringify(data));
+  } catch (error) {
+    console.warn("Could not cache account data:", error);
+  }
 }
 
 function usePersistentState(key, initializer, persistLocally) {
@@ -424,22 +484,22 @@ function CompanyCard({ company, onMove, onEdit, onDelete, onDragStart, onDragEnd
 function App() {
   const [companies, setCompanies] = usePersistentState(
     STORAGE_KEYS.companies,
-    loadCompanies,
+    () => (supabase ? [] : loadCompanies()),
     !supabase,
   );
   const [questions, setQuestions] = usePersistentState(
     STORAGE_KEYS.questions,
-    loadQuestions,
+    () => (supabase ? [] : loadQuestions()),
     !supabase,
   );
   const [motivations, setMotivations] = usePersistentState(
     STORAGE_KEYS.motivations,
-    loadMotivations,
+    () => (supabase ? [] : loadMotivations()),
     !supabase,
   );
   const [skills, setSkills] = usePersistentState(
     STORAGE_KEYS.skills,
-    loadSkills,
+    () => (supabase ? [] : loadSkills()),
     !supabase,
   );
 
@@ -463,6 +523,7 @@ function App() {
   const [session, setSession] = useState(null);
   const [authLoading, setAuthLoading] = useState(Boolean(supabase));
   const [cloudLoading, setCloudLoading] = useState(false);
+  const [hasUserCache, setHasUserCache] = useState(false);
   const [cloudError, setCloudError] = useState("");
   const [saving, setSaving] = useState(false);
   const [cloudReload, setCloudReload] = useState(0);
@@ -494,6 +555,7 @@ function App() {
       window.history.replaceState(null, "", loginUrl);
       setSession(null);
       setCloudLoading(false);
+      setHasUserCache(false);
       setAuthLoading(false);
       window.setTimeout(() => {
         supabase.auth.signOut().catch((error) => {
@@ -510,6 +572,7 @@ function App() {
       setSession(nextSession);
       if (!nextSession) {
         setCloudLoading(false);
+        setHasUserCache(false);
         setCompanies([]);
         setQuestions([]);
         setSkills([]);
@@ -539,6 +602,7 @@ function App() {
   useEffect(() => {
     if (!user) {
       setCloudLoading(false);
+      setHasUserCache(false);
       return undefined;
     }
 
@@ -546,6 +610,15 @@ function App() {
     setCloudLoading(true);
     setCloudError("");
     async function loadAndSyncData() {
+      const cachedData = loadUserDataCache(user.id);
+      setHasUserCache(Boolean(cachedData));
+      if (cachedData) {
+        setCompanies(cachedData.companies);
+        setQuestions(cachedData.questions);
+        setSkills(cachedData.skills);
+        setMotivations(cachedData.motivations);
+      }
+
       const backup = legacyData.current;
       const hasBrowserData =
         backup.companies.length +
@@ -587,6 +660,8 @@ function App() {
       setQuestions(data.questions);
       setSkills(data.skills);
       setMotivations(data.motivations);
+      saveUserDataCache(user.id, data);
+      setHasUserCache(true);
     }
 
     loadAndSyncData()
@@ -606,6 +681,16 @@ function App() {
       active = false;
     };
   }, [user?.id, cloudReload, setCompanies, setMotivations, setQuestions, setSkills]);
+
+  useEffect(() => {
+    if (!user || cloudLoading) return;
+    saveUserDataCache(user.id, {
+      companies,
+      questions,
+      skills,
+      motivations,
+    });
+  }, [user?.id, cloudLoading, companies, questions, skills, motivations]);
 
   async function runCloudMutation(operation) {
     setSaving(true);
@@ -942,8 +1027,8 @@ function App() {
   }
 
   async function signOut() {
-    const { error } = await supabase.auth.signOut();
-    if (error) setMessage(`Could not sign out: ${error.message}`);
+    const { error } = await supabase.auth.signOut({ scope: "local" });
+    if (error) setCloudError(`Could not sign out: ${error.message}`);
   }
 
   if (supabase && authLoading) {
@@ -965,7 +1050,7 @@ function App() {
     );
   }
 
-  if (supabase && cloudLoading) {
+  if (supabase && cloudLoading && !hasUserCache) {
     return (
       <main className="auth-page">
         <section className="auth-card auth-loading-card">
@@ -975,7 +1060,7 @@ function App() {
     );
   }
 
-  if (supabase && cloudError) {
+  if (supabase && cloudError && !hasUserCache) {
     return (
       <main className="auth-page">
         <section className="auth-card">
@@ -1020,6 +1105,25 @@ function App() {
       {saving && (
         <div className="save-loading">
           <CatLoader label="Saving your changes..." compact />
+        </div>
+      )}
+
+      {cloudLoading && hasUserCache && (
+        <div className="sync-notice" role="status">
+          <CatLoader label="Syncing your saved data..." compact />
+        </div>
+      )}
+
+      {cloudError && (
+        <div className="sync-error" role="alert">
+          <span>{cloudError}</span>
+          <button
+            className="secondary"
+            type="button"
+            onClick={() => setCloudReload((current) => current + 1)}
+          >
+            Try again
+          </button>
         </div>
       )}
 

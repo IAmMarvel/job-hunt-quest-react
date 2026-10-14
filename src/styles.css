@@ -625,6 +625,32 @@ textarea:focus {
   font-size: 13px;
 }
 
+.sync-notice,
+.sync-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.sync-error {
+  justify-content: space-between;
+  border-color: #efc6c3;
+  color: #842c2c;
+  background: #fff5f4;
+}
+
+.sync-error .secondary {
+  flex: 0 0 auto;
+}
+
 .auth-page {
   display: grid;
   min-height: 100vh;
