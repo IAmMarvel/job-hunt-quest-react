@@ -636,8 +636,8 @@ textarea:focus {
 }
 
 .auth-card {
-  width: min(100%, 540px);
-  padding: 34px 38px 26px;
+  width: min(100%, 500px);
+  padding: 28px 34px 22px;
   border: 1px solid rgb(255 255 255 / 70%);
   border-radius: 18px;
   background: rgb(255 255 255 / 92%);
@@ -722,8 +722,8 @@ textarea:focus {
 }
 
 .auth-card h1 {
-  margin: 12px 0 0;
-  font-size: 32px;
+  margin: 9px 0 0;
+  font-size: 30px;
 }
 
 .auth-title {
@@ -733,23 +733,23 @@ textarea:focus {
 }
 
 .auth-sprout {
-  width: 48px;
-  height: 48px;
+  width: 44px;
+  height: 44px;
   flex: 0 0 auto;
   color: #315a47;
 }
 
 .auth-card > p {
-  margin: 16px 0 0;
+  margin: 12px 0 0;
   color: var(--muted);
-  font-size: 16px;
-  line-height: 1.5;
+  font-size: 15px;
+  line-height: 1.45;
 }
 
 .auth-form {
   display: grid;
-  gap: 18px;
-  margin-top: 24px;
+  gap: 15px;
+  margin-top: 19px;
 }
 
 .auth-field > span:first-child {
@@ -760,7 +760,7 @@ textarea:focus {
 
 .auth-input-wrap {
   display: flex;
-  min-height: 58px;
+  min-height: 54px;
   align-items: center;
   gap: 12px;
   margin-top: 8px;
@@ -786,7 +786,7 @@ textarea:focus {
 
 .auth-input-wrap input {
   width: 100%;
-  height: 54px;
+  height: 50px;
   min-width: 0;
   margin: 0;
   padding: 0;
@@ -820,7 +820,7 @@ textarea:focus {
 
 .auth-submit {
   display: flex;
-  min-height: 58px;
+  min-height: 54px;
   align-items: center;
   justify-content: space-between;
   margin-top: 2px;
@@ -861,7 +861,7 @@ textarea:focus {
   display: flex;
   align-items: center;
   gap: 14px;
-  margin: 14px 0 0;
+  margin: 10px 0 0;
   color: #737a74;
   font-size: 13px;
 }
@@ -876,7 +876,7 @@ textarea:focus {
 
 .auth-toggle {
   width: 100%;
-  margin-top: 4px;
+  margin-top: 2px;
   color: #6e7471;
   background: transparent;
   font-size: 15px;
@@ -893,7 +893,7 @@ textarea:focus {
   }
 
   .auth-card {
-    padding: 28px 22px 20px;
+    padding: 24px 20px 18px;
   }
 
   .save-loading {
@@ -902,12 +902,12 @@ textarea:focus {
   }
 
   .auth-card h1 {
-    font-size: 27px;
+    font-size: 25px;
   }
 
   .auth-sprout {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
   }
 
   .auth-card > p {
