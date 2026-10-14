@@ -603,6 +603,19 @@ textarea:focus {
   background: #fff;
 }
 
+.sign-out-button {
+  transition: transform 140ms ease, box-shadow 140ms ease, opacity 140ms ease;
+}
+
+.sign-out-button:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.sign-out-button:disabled {
+  cursor: wait;
+  opacity: 0.75;
+}
+
 .account-actions {
   display: flex;
   align-items: center;

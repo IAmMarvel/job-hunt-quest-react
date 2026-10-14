@@ -539,6 +539,7 @@ function App() {
   const [hasUserCache, setHasUserCache] = useState(false);
   const [cloudError, setCloudError] = useState("");
   const [saving, setSaving] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
   const [cloudReload, setCloudReload] = useState(0);
   const legacyData = useRef(null);
 
@@ -1040,8 +1041,13 @@ function App() {
   }
 
   async function signOut() {
-    const { error } = await supabase.auth.signOut({ scope: "local" });
-    if (error) setCloudError(`Could not sign out: ${error.message}`);
+    setSigningOut(true);
+    try {
+      const { error } = await supabase.auth.signOut({ scope: "local" });
+      if (error) setCloudError(`Could not sign out: ${error.message}`);
+    } finally {
+      setSigningOut(false);
+    }
   }
 
   if (supabase && authLoading) {
@@ -1086,8 +1092,13 @@ function App() {
           >
             Try again
           </button>
-          <button className="auth-toggle" type="button" onClick={signOut}>
-            Sign out
+          <button
+            className="auth-toggle sign-out-button"
+            type="button"
+            onClick={signOut}
+            disabled={signingOut}
+          >
+            {signingOut ? <CatLoader label="Signing out..." compact /> : "Sign out"}
           </button>
         </section>
       </main>
@@ -1108,8 +1119,13 @@ function App() {
         {user && (
           <div className="account-actions">
             <span>{user.email}</span>
-            <button className="secondary" type="button" onClick={signOut}>
-              Sign out
+            <button
+              className="secondary sign-out-button"
+              type="button"
+              onClick={signOut}
+              disabled={signingOut}
+            >
+              {signingOut ? <CatLoader label="Signing out..." compact /> : "Sign out"}
             </button>
           </div>
         )}
