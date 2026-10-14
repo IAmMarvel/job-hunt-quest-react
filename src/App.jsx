@@ -35,7 +35,7 @@ const NEXT_STATUS = {
 };
 const STATUS_LABELS = {
   selected: "Selected",
-  running: "Running",
+  running: "Scheduled",
   pending: "Pending",
   rejected: "Not Selected",
 };
@@ -1294,8 +1294,8 @@ function App() {
         </div>
       </section>
       <p className="hint">
-        Click a company card to move it: Running → Selected → Pending → Not
-        Selected → Running
+        Click a company card to move it: Scheduled → Selected → Pending → Not
+        Selected → Scheduled
       </p>
 
       <section className="question-bank">
