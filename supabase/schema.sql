@@ -6,12 +6,16 @@ create table if not exists public.companies (
   rounds integer not null check (rounds between 1 and 20),
   status text not null check (status in ('selected', 'running', 'pending', 'rejected')),
   is_ai_interview boolean not null default false,
+  interview_dates jsonb not null default '[]'::jsonb,
   created_at timestamptz not null default now(),
   unique (user_id, legacy_id)
 );
 
 alter table public.companies
   add column if not exists is_ai_interview boolean not null default false;
+
+alter table public.companies
+  add column if not exists interview_dates jsonb not null default '[]'::jsonb;
 
 create table if not exists public.interview_questions (
   id uuid primary key default gen_random_uuid(),
