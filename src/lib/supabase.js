@@ -74,7 +74,7 @@ export async function fetchUserData() {
   const [companies, questions, skills, motivations] = await Promise.all([
     supabase
       .from(TABLES.companies)
-      .select("id,name,rounds,status,is_ai_interview,interview_dates")
+      .select("id,name,rounds,status,is_ai_interview")
       .order("created_at"),
     supabase
       .from(TABLES.questions)
@@ -144,10 +144,6 @@ export async function importBrowserData(userId, data) {
       rounds: company.rounds,
       status: company.status,
       is_ai_interview: company.is_ai_interview === true,
-      interview_dates: Array.from(
-        { length: company.rounds },
-        (_, index) => company.interview_dates?.[index] ?? null,
-      ),
     }))
     .filter((company) => {
       const name = company.name.trim().toLocaleLowerCase();

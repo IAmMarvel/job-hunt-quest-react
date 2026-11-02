@@ -99,18 +99,6 @@ function loadFromStorage(key, validate, fallback) {
   }
 }
 
-function formatDateTimeLocal(value) {
-  if (!value) return "";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "";
-  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return localDate.toISOString().slice(0, 16);
-}
-
-function toIsoDateTime(value) {
-  return value ? new Date(value).toISOString() : null;
-}
-
 function loadCompanies(fallback = INITIAL_COMPANIES) {
   return loadFromStorage(
     STORAGE_KEYS.companies,
@@ -127,13 +115,6 @@ function loadCompanies(fallback = INITIAL_COMPANIES) {
       rounds: Math.max(1, Math.min(20, Number(company.rounds) || 1)),
       status: company.status,
       is_ai_interview: company.is_ai_interview === true,
-      interview_dates: Array.from(
-        { length: Math.max(1, Math.min(20, Number(company.rounds) || 1)) },
-        (_, index) =>
-          typeof company.interview_dates?.[index] === "string"
-            ? company.interview_dates[index]
-            : null,
-      ),
     }))
     .filter((company) => company.name);
 }
@@ -471,15 +452,7 @@ function SectionHeading({ title, subtitle, aside }) {
   );
 }
 
-function CompanyCard({
-  company,
-  onMove,
-  onEdit,
-  onScheduleDate,
-  onDelete,
-  onDragStart,
-  onDragEnd,
-}) {
+function CompanyCard({ company, onMove, onEdit, onDelete, onDragStart, onDragEnd }) {
   return (
     <article
       className="company"
@@ -517,24 +490,6 @@ function CompanyCard({
       >
         ×
       </button>
-      <details className="company-schedule">
-        <summary>Interview dates</summary>
-        <div className="company-schedule-fields">
-          {Array.from({ length: company.rounds }, (_, index) => (
-            <label key={index}>
-              Round {index + 1}
-              <input
-                type="datetime-local"
-                value={formatDateTimeLocal(company.interview_dates?.[index])}
-                onChange={(event) =>
-                  onScheduleDate(company, index, event.target.value)
-                }
-                aria-label={`Scheduled date and time for ${company.name}, round ${index + 1}`}
-              />
-            </label>
-          ))}
-        </div>
-      </details>
     </article>
   );
 }
@@ -563,7 +518,6 @@ function App() {
 
   const [companyName, setCompanyName] = useState("");
   const [interviewCount, setInterviewCount] = useState("1");
-  const [interviewDates, setInterviewDates] = useState([""]);
   const [isAiInterview, setIsAiInterview] = useState(false);
   const [message, setMessage] = useState("");
   const [draggedId, setDraggedId] = useState(null);
@@ -815,10 +769,6 @@ function App() {
       rounds,
       status: "running",
       is_ai_interview: isAiInterview,
-      interview_dates: Array.from(
-        { length: rounds },
-        (_, index) => toIsoDateTime(interviewDates[index] || ""),
-      ),
     };
     let savedCompany = {
       ...newCompany,
@@ -839,7 +789,6 @@ function App() {
     setMessage(`${name} added as Company #${companies.length + 1} 🟡`);
     setCompanyName("");
     setInterviewCount("1");
-    setInterviewDates([""]);
     setIsAiInterview(false);
   }
 
@@ -876,44 +825,18 @@ function App() {
       return;
     }
 
-    const interview_dates = Array.from(
-      { length: rounds },
-      (_, index) => company.interview_dates?.[index] ?? null,
-    );
     if (user) {
       const result = await runCloudMutation(() =>
-        updateCompany(company.id, { rounds, interview_dates }),
+        updateCompany(company.id, { rounds }),
       );
       if (!result.ok) return;
     }
     setCompanies((current) =>
       current.map((item) =>
-        item.id === company.id ? { ...item, rounds, interview_dates } : item,
+        item.id === company.id ? { ...item, rounds } : item,
       ),
     );
     setMessage(`${company.name}: interview count updated to ${rounds}.`);
-  }
-
-  async function scheduleInterview(company, roundIndex, value) {
-    const interview_dates = Array.from(
-      { length: company.rounds },
-      (_, index) =>
-        index === roundIndex
-          ? toIsoDateTime(value)
-          : company.interview_dates?.[index] ?? null,
-    );
-    if (user) {
-      const result = await runCloudMutation(() =>
-        updateCompany(company.id, { interview_dates }),
-      );
-      if (!result.ok) return;
-    }
-    setCompanies((current) =>
-      current.map((item) =>
-        item.id === company.id ? { ...item, interview_dates } : item,
-      ),
-    );
-    setMessage(`${company.name}: interview schedule updated.`);
   }
 
   async function deleteCompany(company) {
@@ -1273,44 +1196,9 @@ function App() {
               max="20"
               required
               value={interviewCount}
-              onChange={(event) => {
-                const value = event.target.value;
-                setInterviewCount(value);
-                const count = Number(value);
-                if (Number.isInteger(count) && count >= 1 && count <= 20) {
-                  setInterviewDates((current) =>
-                    Array.from({ length: count }, (_, index) => current[index] || ""),
-                  );
-                }
-              }}
+              onChange={(event) => setInterviewCount(event.target.value)}
             />
           </label>
-          {Number.isInteger(Number(interviewCount)) &&
-            Number(interviewCount) >= 1 &&
-            Number(interviewCount) <= 20 && (
-              <details className="new-company-schedule">
-                <summary>Add scheduled dates (optional)</summary>
-                <div className="company-schedule-fields">
-                  {Array.from({ length: Number(interviewCount) }, (_, index) => (
-                    <label key={index}>
-                      Round {index + 1}
-                      <input
-                        type="datetime-local"
-                        value={interviewDates[index] || ""}
-                        onChange={(event) =>
-                          setInterviewDates((current) =>
-                            current.map((date, dateIndex) =>
-                              dateIndex === index ? event.target.value : date,
-                            ),
-                          )
-                        }
-                        aria-label={`Scheduled date and time for round ${index + 1}`}
-                      />
-                    </label>
-                  ))}
-                </div>
-              </details>
-            )}
           <label className="ai-interview-option">
             <input
               type="checkbox"
@@ -1358,7 +1246,6 @@ function App() {
                     company={company}
                     onMove={moveCompany}
                     onEdit={editCompany}
-                    onScheduleDate={scheduleInterview}
                     onDelete={deleteCompany}
                     onDragStart={handleDragStart}
                     onDragEnd={() => {
@@ -1386,7 +1273,6 @@ function App() {
                     company={company}
                     onMove={moveCompany}
                     onEdit={editCompany}
-                    onScheduleDate={scheduleInterview}
                     onDelete={deleteCompany}
                     onDragStart={handleDragStart}
                     onDragEnd={() => {
