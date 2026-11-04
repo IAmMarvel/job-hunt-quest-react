@@ -42,6 +42,7 @@ export const supabase =
     : null;
 
 const TABLES = {
+  collections: "collections",
   companies: "companies",
   questions: "interview_questions",
   skills: "skills",
@@ -71,10 +72,14 @@ async function deleteRow(table, id) {
 }
 
 export async function fetchUserData() {
-  const [companies, questions, skills, motivations] = await Promise.all([
+  const [collections, companies, questions, skills, motivations] = await Promise.all([
+    supabase
+      .from(TABLES.collections)
+      .select("id,name")
+      .order("created_at"),
     supabase
       .from(TABLES.companies)
-      .select("id,name,rounds,status,is_ai_interview,interview_language")
+      .select("id,name,rounds,status,is_ai_interview,interview_language,collection_id")
       .order("created_at"),
     supabase
       .from(TABLES.questions)
@@ -91,6 +96,7 @@ export async function fetchUserData() {
   ]);
 
   return {
+    collections: unwrap(collections),
     companies: unwrap(companies),
     questions: unwrap(questions),
     skills: unwrap(skills),
@@ -98,8 +104,19 @@ export async function fetchUserData() {
   };
 }
 
-export const createCompany = (userId, company) =>
-  insertRow(TABLES.companies, { ...company, user_id: userId });
+export const createCollection = (userId, name) =>
+  insertRow(TABLES.collections, { name, user_id: userId });
+export const deleteCollection = (id) => deleteRow(TABLES.collections, id);
+export const createCompany = async (userId, company, collectionIds) => {
+  const rows = collectionIds.map((collectionId) => ({
+    ...company,
+    collection_id: collectionId,
+    user_id: userId,
+  }));
+  return unwrap(
+    await supabase.from(TABLES.companies).insert(rows).select("*"),
+  );
+};
 export const updateCompany = (id, changes) =>
   updateRow(TABLES.companies, id, changes);
 export const deleteCompany = (id) => deleteRow(TABLES.companies, id);
@@ -121,7 +138,7 @@ export const updateMotivation = (id, line) =>
   updateRow(TABLES.motivations, id, { line });
 export const deleteMotivation = (id) => deleteRow(TABLES.motivations, id);
 
-export async function importBrowserData(userId, data) {
+export async function importBrowserData(userId, data, collectionId) {
   const existingCompanies = unwrap(
     await supabase
       .from(TABLES.companies)
@@ -139,6 +156,7 @@ export async function importBrowserData(userId, data) {
   const companyRows = data.companies
     .map((company, index) => ({
       user_id: userId,
+      collection_id: collectionId,
       legacy_id: `company:${company.id ?? index}`,
       name: company.name,
       rounds: company.rounds,

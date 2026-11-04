@@ -1,10 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   createCompany,
+  createCollection,
   createMotivation,
   createQuestion,
   createSkill,
   deleteCompany as deleteCompanyRemote,
+  deleteCollection as deleteCollectionRemote,
   deleteMotivation as deleteMotivationRemote,
   deleteQuestion as deleteQuestionRemote,
   deleteSkill as deleteSkillRemote,
@@ -19,6 +21,7 @@ import {
 
 const STORAGE_KEYS = {
   companies: "job-hunt-quest-v1",
+  collections: "job-hunt-quest-collections-v1",
   questions: "job-hunt-quest-questions-v1",
   motivations: "job-hunt-quest-motivations-v1",
   skills: "job-hunt-quest-skills-v1",
@@ -28,6 +31,11 @@ const USER_CACHE_KEY = "job-hunt-quest-user-cache-v1";
 
 const STATUSES = ["selected", "running", "pending", "rejected"];
 const INTERVIEW_LANGUAGES = ["Java", "Python"];
+const DEFAULT_COLLECTION_ID = "local-bangalore-interviews";
+const DEFAULT_COLLECTION = {
+  id: DEFAULT_COLLECTION_ID,
+  name: "Bangalore Interviews",
+};
 const NEXT_STATUS = {
   running: "selected",
   selected: "pending",
@@ -121,8 +129,26 @@ function loadCompanies(fallback = INITIAL_COMPANIES) {
       )
         ? company.interview_language
         : null,
+      collection_id: company.collection_id ?? DEFAULT_COLLECTION_ID,
     }))
     .filter((company) => company.name);
+}
+
+function loadCollections() {
+  return loadFromStorage(
+    STORAGE_KEYS.collections,
+    (collection) =>
+      collection &&
+      (typeof collection.id === "string" ||
+        (typeof collection.id === "number" &&
+          Number.isFinite(collection.id))) &&
+      typeof collection.name === "string" &&
+      collection.name.trim(),
+    [DEFAULT_COLLECTION],
+  ).map((collection) => ({
+    id: collection.id,
+    name: collection.name.trim(),
+  }));
 }
 
 function loadQuestions() {
@@ -175,6 +201,7 @@ function loadUserDataCache(userId) {
     if (
       !cached ||
       !Array.isArray(cached.companies) ||
+      !Array.isArray(cached.collections) ||
       !Array.isArray(cached.questions) ||
       !Array.isArray(cached.skills) ||
       !Array.isArray(cached.motivations)
@@ -189,7 +216,14 @@ function loadUserDataCache(userId) {
           typeof item.name === "string" &&
           STATUSES.includes(item.status) &&
           (item.interview_language == null ||
-            INTERVIEW_LANGUAGES.includes(item.interview_language)),
+            INTERVIEW_LANGUAGES.includes(item.interview_language)) &&
+          (item.collection_id == null ||
+            typeof item.collection_id === "string" ||
+            Number.isFinite(item.collection_id)),
+      ),
+      collections: cached.collections.filter(
+        (item) =>
+          hasId(item) && typeof item.name === "string" && item.name.trim(),
       ),
       questions: cached.questions.filter(
         (item) =>
@@ -460,6 +494,136 @@ function SectionHeading({ title, subtitle, aside }) {
   );
 }
 
+function DashboardView({
+  companies,
+  collections,
+  onOpenCollection,
+  onCreateCollection,
+  onDeleteCollection,
+}) {
+  const statusCounts = Object.fromEntries(
+    STATUSES.map((status) => [
+      status,
+      companies.filter((company) => company.status === status).length,
+    ]),
+  );
+  const [newCollectionName, setNewCollectionName] = useState("");
+
+  function submitCollection(event) {
+    event.preventDefault();
+    const name = newCollectionName.trim();
+    if (!name) return;
+    onCreateCollection(name);
+    setNewCollectionName("");
+  }
+
+  return (
+    <section className="dashboard-page" aria-label="Job search dashboard">
+    <div className="dashboard-heading">
+      <div>
+        <div className="eyebrow">YOUR JOB SEARCH</div>
+        <h2>Dashboard</h2>
+        <p>Your applications, organized in one place.</p>
+      </div>
+    </div>
+
+    <div className="dashboard-stats">
+      <article className="dashboard-stat">
+        <div>
+          <strong>{companies.length}</strong>
+          <span>Total companies</span>
+        </div>
+      </article>
+      <article className="dashboard-stat">
+        <div>
+          <strong>{statusCounts.running}</strong>
+          <span>Scheduled</span>
+        </div>
+      </article>
+      <article className="dashboard-stat">
+        <div>
+          <strong>{statusCounts.pending}</strong>
+          <span>Pending</span>
+        </div>
+      </article>
+      <article className="dashboard-stat">
+        <div>
+          <strong>{statusCounts.selected}</strong>
+          <span>Selected</span>
+        </div>
+      </article>
+    </div>
+
+    <section className="collection-section" aria-labelledby="collections-title">
+      <div className="collection-section-heading">
+        <div>
+          <h3 id="collections-title">Interview collections</h3>
+          <p>Open a collection to view and manage its companies.</p>
+        </div>
+      </div>
+      <div className="collection-cards">
+        {collections.map((collection) => {
+          const collectionCompanies = companies.filter(
+            (company) => company.collection_id === collection.id,
+          );
+          const activeCount = collectionCompanies.filter(
+            (company) => company.status !== "rejected",
+          ).length;
+          return (
+            <article className="collection-card" key={collection.id}>
+              <button
+                className="collection-open"
+                type="button"
+                onClick={() => onOpenCollection(collection)}
+              >
+                <span className="collection-card-icon">▤</span>
+                <span className="collection-card-content">
+                  <strong>{collection.name}</strong>
+                  <span>
+                    {collectionCompanies.length} companies · {activeCount} active
+                  </span>
+                </span>
+                <span className="collection-card-arrow">→</span>
+              </button>
+              <button
+                className="collection-delete"
+                type="button"
+                onClick={() => onDeleteCollection(collection)}
+                aria-label={`Delete ${collection.name} collection`}
+                title="Delete collection and its companies"
+              >
+                ×
+              </button>
+            </article>
+          );
+        })}
+        {collections.length === 0 && (
+          <p className="collection-empty">
+            No collections yet. Create one to start organizing your applications.
+          </p>
+        )}
+      </div>
+      <form className="new-collection-form" onSubmit={submitCollection}>
+        <label>
+          Collection name
+          <input
+            type="text"
+            maxLength="80"
+            placeholder="e.g. Jaipur Interviews"
+            value={newCollectionName}
+            onChange={(event) => setNewCollectionName(event.target.value)}
+            required
+          />
+        </label>
+        <button className="secondary" type="submit">
+          + Create collection
+        </button>
+        </form>
+    </section>
+  </section>
+  );
+}
+
 function CompanyCard({ company, onMove, onEdit, onDelete, onDragStart, onDragEnd }) {
   return (
     <article
@@ -511,6 +675,11 @@ function App() {
     () => (supabase ? [] : loadCompanies()),
     !supabase,
   );
+  const [collections, setCollections] = usePersistentState(
+    STORAGE_KEYS.collections,
+    () => (supabase ? [] : loadCollections()),
+    !supabase,
+  );
   const [questions, setQuestions] = usePersistentState(
     STORAGE_KEYS.questions,
     () => (supabase ? [] : loadQuestions()),
@@ -531,6 +700,9 @@ function App() {
   const [interviewCount, setInterviewCount] = useState("1");
   const [interviewLanguage, setInterviewLanguage] = useState("Java");
   const [isAiInterview, setIsAiInterview] = useState(false);
+  const [activeView, setActiveView] = useState("dashboard");
+  const [activeCollectionId, setActiveCollectionId] = useState(null);
+  const [selectedCollectionIds, setSelectedCollectionIds] = useState([]);
   const [message, setMessage] = useState("");
   const [draggedId, setDraggedId] = useState(null);
   const [dragOverStatus, setDragOverStatus] = useState(null);
@@ -567,6 +739,35 @@ function App() {
   const user = session?.user ?? null;
 
   useEffect(() => {
+    if (!collections.length) {
+      setActiveCollectionId(null);
+      setSelectedCollectionIds([]);
+      return;
+    }
+    if (!collections.some((collection) => collection.id === activeCollectionId)) {
+      setActiveCollectionId(collections[0].id);
+      setSelectedCollectionIds([collections[0].id]);
+    }
+  }, [collections, activeCollectionId]);
+
+  useEffect(() => {
+    const fallbackCollection =
+      collections.find(
+        (collection) =>
+          collection.name.toLowerCase() === "bangalore interviews",
+      ) ?? collections[0];
+    if (!fallbackCollection) return;
+    const collectionIds = new Set(collections.map((collection) => collection.id));
+    setCompanies((current) =>
+      current.map((company) =>
+        collectionIds.has(company.collection_id)
+          ? company
+          : { ...company, collection_id: fallbackCollection.id },
+      ),
+    );
+  }, [collections, setCompanies]);
+
+  useEffect(() => {
     if (!supabase) return undefined;
     let active = true;
 
@@ -600,6 +801,7 @@ function App() {
         setCloudLoading(false);
         setHasUserCache(false);
         setCompanies([]);
+        setCollections([]);
         setQuestions([]);
         setSkills([]);
         setMotivations([]);
@@ -640,6 +842,7 @@ function App() {
       setHasUserCache(Boolean(cachedData));
       if (cachedData) {
         setCompanies(cachedData.companies);
+        setCollections(cachedData.collections);
         setQuestions(cachedData.questions);
         setSkills(cachedData.skills);
         setMotivations(cachedData.motivations);
@@ -661,12 +864,18 @@ function App() {
         console.warn("Could not check browser data sync status:", error);
       }
 
-      let data;
+      let data = await fetchUserData();
+      let defaultCollection = data.collections.find(
+        (collection) => collection.name.toLowerCase() === "bangalore interviews",
+      );
+      if (!defaultCollection) {
+        defaultCollection = await createCollection(user.id, "Bangalore Interviews");
+        data.collections = [...data.collections, defaultCollection];
+      }
+
       if (!browserDataImported) {
         if (hasBrowserData) {
-          data = await importBrowserData(user.id, backup);
-        } else {
-          data = await fetchUserData();
+          data = await importBrowserData(user.id, backup, defaultCollection.id);
         }
         if (!active) return;
         try {
@@ -683,6 +892,7 @@ function App() {
 
       if (!active) return;
       setCompanies(data.companies);
+      setCollections(data.collections);
       setQuestions(data.questions);
       setSkills(data.skills);
       setMotivations(data.motivations);
@@ -712,11 +922,12 @@ function App() {
     if (!user || cloudLoading) return;
     saveUserDataCache(user.id, {
       companies,
+      collections,
       questions,
       skills,
       motivations,
     });
-  }, [user?.id, cloudLoading, companies, questions, skills, motivations]);
+  }, [user?.id, cloudLoading, companies, collections, questions, skills, motivations]);
 
   async function runCloudMutation(operation) {
     setSaving(true);
@@ -730,19 +941,72 @@ function App() {
     }
   }
 
+  async function addCollection(name) {
+    if (collections.some((item) => item.name.toLowerCase() === name.toLowerCase())) {
+      setMessage(`A collection named "${name}" already exists.`);
+      return;
+    }
+    let collection = { id: `local-${Date.now()}`, name };
+    if (user) {
+      const result = await runCloudMutation(() =>
+        createCollection(user.id, name),
+      );
+      if (!result.ok) return;
+      collection = result.value;
+    }
+    setCollections((current) => [...current, collection]);
+    setMessage(`${name} collection created.`);
+  }
+
+  async function removeCollection(collection) {
+    if (
+      !window.confirm(
+        `Delete "${collection.name}" and all companies in it? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    if (user) {
+      const result = await runCloudMutation(() =>
+        deleteCollectionRemote(collection.id),
+      );
+      if (!result.ok) return;
+    }
+    setCollections((current) =>
+      current.filter((item) => item.id !== collection.id),
+    );
+    setCompanies((current) =>
+      current.filter((company) => company.collection_id !== collection.id),
+    );
+    setMessage(`${collection.name} collection and its companies deleted.`);
+  }
+
+  const activeCollection = collections.find(
+    (collection) => collection.id === activeCollectionId,
+  );
+  const collectionCompanies = useMemo(
+    () =>
+      activeCollection
+        ? companies.filter(
+            (company) => company.collection_id === activeCollection.id,
+          )
+        : [],
+    [companies, activeCollection],
+  );
+
   const groups = useMemo(
     () =>
       Object.fromEntries(
         STATUSES.map((status) => [
           status,
-          companies.filter((company) => company.status === status),
+          collectionCompanies.filter((company) => company.status === status),
         ]),
       ),
-    [companies],
+    [collectionCompanies],
   );
   const aiInterviewCompanies = useMemo(
-    () => companies.filter((company) => company.is_ai_interview),
-    [companies],
+    () => collectionCompanies.filter((company) => company.is_ai_interview),
+    [collectionCompanies],
   );
 
   const visibleSkills = useMemo(() => {
@@ -771,7 +1035,14 @@ function App() {
       setMessage("Interview count must be between 1 and 20.");
       return;
     }
-    if (companies.length >= 100) {
+    const targetCollections = collections.filter((collection) =>
+      selectedCollectionIds.includes(collection.id),
+    );
+    if (!targetCollections.length) {
+      setMessage("Select at least one collection for this company.");
+      return;
+    }
+    if (companies.length + targetCollections.length > 100) {
       setMessage("🎉 Company #100 reached!");
       return;
     }
@@ -783,23 +1054,29 @@ function App() {
       is_ai_interview: isAiInterview,
       interview_language: interviewLanguage,
     };
-    let savedCompany = {
+    let savedCompanies = targetCollections.map((collection, index) => ({
       ...newCompany,
+      collection_id: collection.id,
       id:
-        Math.max(
-          0,
-          ...companies.map((company) => Number(company.id) || 0),
-        ) + 1,
-    };
+        Math.max(0, ...companies.map((company) => Number(company.id) || 0)) +
+        index +
+        1,
+    }));
     if (user) {
       const result = await runCloudMutation(() =>
-        createCompany(user.id, newCompany),
+        createCompany(
+          user.id,
+          newCompany,
+          targetCollections.map((collection) => collection.id),
+        ),
       );
       if (!result.ok) return;
-      savedCompany = result.value;
+      savedCompanies = result.value;
     }
-    setCompanies((current) => [...current, savedCompany]);
-    setMessage(`${name} added as Company #${companies.length + 1} 🟡`);
+    setCompanies((current) => [...current, ...savedCompanies]);
+    setMessage(
+      `${name} added to ${targetCollections.length} collection${targetCollections.length === 1 ? "" : "s"}.`,
+    );
     setCompanyName("");
     setInterviewCount("1");
     setInterviewLanguage("Java");
@@ -1161,6 +1438,25 @@ function App() {
         )}
       </header>
 
+      <nav className="app-navigation" aria-label="Main navigation">
+        <button
+          className={activeView === "dashboard" ? "active" : ""}
+          type="button"
+          aria-current={activeView === "dashboard" ? "page" : undefined}
+          onClick={() => setActiveView("dashboard")}
+        >
+          Dashboard
+        </button>
+        <button
+          className={activeView === "board" ? "active" : ""}
+          type="button"
+          aria-current={activeView === "board" ? "page" : undefined}
+          onClick={() => setActiveView("board")}
+        >
+          Company board
+        </button>
+      </nav>
+
       {saving && (
         <div className="save-loading">
           <CatLoader label="Saving your changes..." compact />
@@ -1193,6 +1489,36 @@ function App() {
         </div>
       )}
 
+      {activeView === "dashboard" && (
+        <DashboardView
+          companies={companies}
+          collections={collections}
+          onOpenCollection={(collection) => {
+            setActiveCollectionId(collection.id);
+            setSelectedCollectionIds([collection.id]);
+            setActiveView("board");
+          }}
+          onCreateCollection={addCollection}
+          onDeleteCollection={removeCollection}
+        />
+      )}
+
+      {activeView === "board" && (
+        <>
+      <div className="board-heading">
+        <button
+          className="dashboard-link"
+          type="button"
+          onClick={() => setActiveView("dashboard")}
+        >
+          ← Dashboard
+        </button>
+        <div>
+          <div className="eyebrow">INTERVIEW COLLECTION</div>
+          <h2>{activeCollection?.name ?? "Select a collection"}</h2>
+        </div>
+        <span>{collectionCompanies.length} companies</span>
+      </div>
       <div
         className="progress"
         role="progressbar"
@@ -1250,6 +1576,25 @@ function App() {
             />
             AI interview
           </label>
+          <fieldset className="collection-picker">
+            <legend>Add to collections</legend>
+            {collections.map((collection) => (
+              <label key={collection.id}>
+                <input
+                  type="checkbox"
+                  checked={selectedCollectionIds.includes(collection.id)}
+                  onChange={(event) =>
+                    setSelectedCollectionIds((current) =>
+                      event.target.checked
+                        ? [...current, collection.id]
+                        : current.filter((id) => id !== collection.id),
+                    )
+                  }
+                />
+                {collection.name}
+              </label>
+            ))}
+          </fieldset>
           <button className="add-btn" type="submit">
             {saving ? "Saving..." : "+ Add Company"}
           </button>
@@ -1600,6 +1945,8 @@ function App() {
         </div>
       </section>
 
+        </>
+      )}
     </main>
   );
 }

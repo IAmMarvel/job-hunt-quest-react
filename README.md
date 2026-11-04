@@ -26,6 +26,8 @@ To enable the **AI interview** checkbox and stack for an existing Supabase proje
 
 To add the **Java/Python interview language** field to an existing Supabase project, run [`supabase/add_interview_language.sql`](./supabase/add_interview_language.sql) in the SQL Editor. New projects get this column when you run [`supabase/schema.sql`](./supabase/schema.sql). Existing companies remain unset until you edit them.
 
+To add **interview collections** to an existing Supabase project, run [`supabase/add_collections.sql`](./supabase/add_collections.sql) in the SQL Editor. It creates a “Bangalore Interviews” collection for each existing account and moves that account’s unassigned companies into it. New projects get collections when you run [`supabase/schema.sql`](./supabase/schema.sql).
+
 The frontend key is public by design; Row Level Security policies in the schema restrict every record to its owning authenticated user. Never add a Supabase service-role key to the frontend or GitHub Pages build.
 
 The app is configured for GitHub Pages at `/job-hunt-quest-react/`. Push to `main` to build and deploy through GitHub Actions.
