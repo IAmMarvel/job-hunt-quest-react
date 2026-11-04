@@ -270,25 +270,47 @@ function loadUserDataCache(userId) {
   }
 }
 
-function toScheduledAt(value) {
-  if (!value) return null;
-  const date = new Date(value);
+function toScheduledAt(dateValue, timeValue, period) {
+  if (!dateValue || !timeValue) return null;
+  const match = timeValue.match(/^(0?[1-9]|1[0-2]):([0-5]\d)$/);
+  if (!match) return null;
+  const hour12 = Number(match[1]);
+  const hour24 = (hour12 % 12) + (period === "PM" ? 12 : 0);
+  const date = new Date(`${dateValue}T${String(hour24).padStart(2, "0")}:${match[2]}`);
   return Number.isNaN(date.getTime()) ? null : date.toISOString();
 }
 
-function toDateTimeInputValue(value) {
-  if (!value || Number.isNaN(Date.parse(value))) return "";
+function getScheduleInputValues(value) {
+  if (!value || Number.isNaN(Date.parse(value))) {
+    return { date: "", time: "", period: "AM" };
+  }
   const date = new Date(value);
   const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
-  return localDate.toISOString().slice(0, 16);
+  const [dateValue, timeValue] = localDate.toISOString().slice(0, 16).split("T");
+  const [hour, minute] = timeValue.split(":").map(Number);
+  const hour12 = hour % 12 || 12;
+  return {
+    date: dateValue,
+    time: `${String(hour12).padStart(2, "0")}:${String(minute).padStart(2, "0")}`,
+    period: hour >= 12 ? "PM" : "AM",
+  };
 }
 
 function formatScheduledAt(value) {
   if (!value || Number.isNaN(Date.parse(value))) return "";
-  return new Intl.DateTimeFormat(undefined, {
+  const date = new Date(value);
+  const formattedDate = new Intl.DateTimeFormat(undefined, {
     dateStyle: "medium",
-    timeStyle: "short",
-  }).format(new Date(value));
+  }).format(date);
+  return `${formattedDate} ${formatScheduledTime(date)}`;
+}
+
+function formatScheduledTime(value) {
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(value);
 }
 
 function saveUserDataCache(userId, data) {
@@ -717,9 +739,7 @@ function DashboardView({
                         <strong>{company.name}</strong>
                         <span>{collection?.name ?? "Interview"} · {company.rounds} round{company.rounds === 1 ? "" : "s"}</span>
                       </div>
-                      <time dateTime={company.scheduled_at}>
-                        {new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date)}
-                      </time>
+                      <time dateTime={company.scheduled_at}>{formatScheduledTime(date)}</time>
                       {index === 0 && <span className="sr-only">Next interview</span>}
                     </article>
                   );
@@ -927,7 +947,9 @@ function App() {
   const [companyName, setCompanyName] = useState("");
   const [interviewCount, setInterviewCount] = useState("1");
   const [interviewLanguage, setInterviewLanguage] = useState("Java");
-  const [scheduledAt, setScheduledAt] = useState("");
+  const [scheduledDate, setScheduledDate] = useState("");
+  const [scheduledTime, setScheduledTime] = useState("");
+  const [scheduledPeriod, setScheduledPeriod] = useState("AM");
   const [isAiInterview, setIsAiInterview] = useState(false);
   const [companyStatus, setCompanyStatus] = useState("running");
   const [activeView, setActiveView] = useState("dashboard");
@@ -1264,7 +1286,9 @@ function App() {
     setCompanyName("");
     setInterviewCount("1");
     setInterviewLanguage("Java");
-    setScheduledAt("");
+    setScheduledDate("");
+    setScheduledTime("");
+    setScheduledPeriod("AM");
     setIsAiInterview(false);
     setCompanyStatus("running");
     setSelectedCollectionIds(
@@ -1279,7 +1303,10 @@ function App() {
     setCompanyName(company.name);
     setInterviewCount(String(company.rounds));
     setInterviewLanguage(company.interview_language ?? "");
-    setScheduledAt(toDateTimeInputValue(company.scheduled_at));
+    const scheduleValues = getScheduleInputValues(company.scheduled_at);
+    setScheduledDate(scheduleValues.date);
+    setScheduledTime(scheduleValues.time);
+    setScheduledPeriod(scheduleValues.period);
     setIsAiInterview(company.is_ai_interview);
     setCompanyStatus(company.status);
     setMessage("");
@@ -1311,8 +1338,11 @@ function App() {
       setMessage("Interview language must be Java, Python, or blank.");
       return;
     }
-    const scheduled_at = toScheduledAt(scheduledAt);
-    if (scheduledAt && scheduled_at === null) {
+    const hasSchedule = Boolean(scheduledDate || scheduledTime);
+    const scheduled_at = hasSchedule
+      ? toScheduledAt(scheduledDate, scheduledTime, scheduledPeriod)
+      : null;
+    if (hasSchedule && scheduled_at === null) {
       setMessage("Enter a valid interview date and time, or leave it blank.");
       return;
     }
@@ -1390,7 +1420,9 @@ function App() {
     setCompanyName("");
     setInterviewCount("1");
     setInterviewLanguage("Java");
-    setScheduledAt("");
+    setScheduledDate("");
+    setScheduledTime("");
+    setScheduledPeriod("AM");
     setIsAiInterview(false);
     setCompanyStatus("running");
     closeCompanyDialog();
@@ -2284,12 +2316,34 @@ function App() {
                 />
               </label>
               <label className="dialog-field">
-                Interview date &amp; time
+                Interview date
                 <input
-                  type="datetime-local"
-                  value={scheduledAt}
-                  onChange={(event) => setScheduledAt(event.target.value)}
+                  type="date"
+                  value={scheduledDate}
+                  onChange={(event) => setScheduledDate(event.target.value)}
                 />
+              </label>
+              <label className="dialog-field">
+                Interview time (12-hour)
+                <span className="interview-time-input">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="09:30"
+                    pattern="(?:0[1-9]|1[0-2]):[0-5][0-9]"
+                    aria-label="Interview time in 12-hour format"
+                    value={scheduledTime}
+                    onChange={(event) => setScheduledTime(event.target.value)}
+                  />
+                  <select
+                    aria-label="AM or PM"
+                    value={scheduledPeriod}
+                    onChange={(event) => setScheduledPeriod(event.target.value)}
+                  >
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                </span>
               </label>
               <label className="dialog-field">
                 Interview language

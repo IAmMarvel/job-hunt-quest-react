@@ -2662,6 +2662,12 @@ textarea:focus {
   font-size: 10px;
 }
 
+.interview-time-input {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  gap: 6px;
+}
+
 .dialog-checkbox {
   display: flex;
   align-items: center;
