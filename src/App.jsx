@@ -129,6 +129,11 @@ function loadCompanies(fallback = INITIAL_COMPANIES) {
       )
         ? company.interview_language
         : null,
+      scheduled_at:
+        typeof company.scheduled_at === "string" &&
+        !Number.isNaN(Date.parse(company.scheduled_at))
+          ? company.scheduled_at
+          : null,
       collection_id: company.collection_id ?? DEFAULT_COLLECTION_ID,
     }))
     .filter((company) => company.name);
@@ -217,6 +222,9 @@ function loadUserDataCache(userId) {
           STATUSES.includes(item.status) &&
           (item.interview_language == null ||
             INTERVIEW_LANGUAGES.includes(item.interview_language)) &&
+          (item.scheduled_at == null ||
+            (typeof item.scheduled_at === "string" &&
+              !Number.isNaN(Date.parse(item.scheduled_at)))) &&
           (item.collection_id == null ||
             typeof item.collection_id === "string" ||
             Number.isFinite(item.collection_id)),
@@ -248,6 +256,27 @@ function loadUserDataCache(userId) {
     console.warn("Could not restore cached account data:", error);
     return null;
   }
+}
+
+function toScheduledAt(value) {
+  if (!value) return null;
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+}
+
+function toDateTimeInputValue(value) {
+  if (!value || Number.isNaN(Date.parse(value))) return "";
+  const date = new Date(value);
+  const localDate = new Date(date.getTime() - date.getTimezoneOffset() * 60_000);
+  return localDate.toISOString().slice(0, 16);
+}
+
+function formatScheduledAt(value) {
+  if (!value || Number.isNaN(Date.parse(value))) return "";
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(value));
 }
 
 function saveUserDataCache(userId, data) {
@@ -500,6 +529,8 @@ function DashboardView({
   onOpenCollection,
   onCreateCollection,
   onDeleteCollection,
+  onAddCompany,
+  onViewCompanies,
 }) {
   const statusCounts = Object.fromEntries(
     STATUSES.map((status) => [
@@ -507,6 +538,19 @@ function DashboardView({
       companies.filter((company) => company.status === status).length,
     ]),
   );
+  const upcomingCompanies = [...companies]
+    .filter(
+      (company) =>
+        company.scheduled_at &&
+        new Date(company.scheduled_at).getTime() >= Date.now(),
+    )
+    .sort(
+      (left, right) =>
+        new Date(left.scheduled_at).getTime() -
+        new Date(right.scheduled_at).getTime(),
+    )
+    .slice(0, 3);
+  const scheduledCount = companies.filter((company) => company.scheduled_at).length;
   const [newCollectionName, setNewCollectionName] = useState("");
 
   function submitCollection(event) {
@@ -518,137 +562,227 @@ function DashboardView({
   }
 
   return (
-    <section className="dashboard-page" aria-label="Job search dashboard">
-    <div className="dashboard-heading">
-      <div>
-        <div className="eyebrow">YOUR JOB SEARCH</div>
-        <h2>Dashboard</h2>
-        <p>Your applications, organized in one place.</p>
-      </div>
-    </div>
+    <section className="dashboard-page redesigned-dashboard" aria-label="Job search dashboard">
+        <div className="dashboard-heading redesigned-page-heading">
+          <div>
+            <div className="eyebrow">YOUR JOB SEARCH</div>
+            <h2>Your job search, at a glance</h2>
+            <p>A clear view of your applications and what’s coming next.</p>
+          </div>
+          <button className="primary-action" type="button" onClick={onAddCompany}>
+            <span aria-hidden="true">＋</span> Add a company
+          </button>
+        </div>
 
-    <div className="dashboard-stats">
-      <article className="dashboard-stat">
-        <div>
-          <strong>{companies.length}</strong>
-          <span>Total companies</span>
-        </div>
-      </article>
-      <article className="dashboard-stat">
-        <div>
-          <strong>{statusCounts.running}</strong>
-          <span>Scheduled</span>
-        </div>
-      </article>
-      <article className="dashboard-stat">
-        <div>
-          <strong>{statusCounts.pending}</strong>
-          <span>Pending</span>
-        </div>
-      </article>
-      <article className="dashboard-stat">
-        <div>
-          <strong>{statusCounts.selected}</strong>
-          <span>Selected</span>
-        </div>
-      </article>
-    </div>
-
-    <section className="collection-section" aria-labelledby="collections-title">
-      <div className="collection-section-heading">
-        <div>
-          <h3 id="collections-title">Interview collections</h3>
-          <p>Open a collection to view and manage its companies.</p>
-        </div>
-      </div>
-      <div className="collection-cards">
-        {collections.map((collection) => {
-          const collectionCompanies = companies.filter(
-            (company) => company.collection_id === collection.id,
-          );
-          const activeCount = collectionCompanies.filter(
-            (company) => company.status !== "rejected",
-          ).length;
-          return (
-            <article className="collection-card" key={collection.id}>
-              <button
-                className="collection-open"
-                type="button"
-                onClick={() => onOpenCollection(collection)}
-              >
-                <span className="collection-card-icon">▤</span>
-                <span className="collection-card-content">
-                  <strong>{collection.name}</strong>
-                  <span>
-                    {collectionCompanies.length} companies · {activeCount} active
-                  </span>
-                </span>
-                <span className="collection-card-arrow">→</span>
-              </button>
-              <button
-                className="collection-delete"
-                type="button"
-                onClick={() => onDeleteCollection(collection)}
-                aria-label={`Delete ${collection.name} collection`}
-                title="Delete collection and its companies"
-              >
-                ×
-              </button>
+        <div className="dashboard-stats">
+          {[
+            ["Total companies", companies.length, "Across all collections", "▤"],
+            ["Interviews scheduled", scheduledCount, "With a date and time", "◷"],
+            ["Awaiting response", statusCounts.pending, "Keep your momentum", "◌"],
+            ["Offers & selections", statusCounts.selected, "You’re making progress", "✳"],
+          ].map(([label, count, note, icon]) => (
+            <article className="dashboard-stat" key={label}>
+              <div className="stat-topline">
+                <span>{label}</span>
+                <span aria-hidden="true">{icon}</span>
+              </div>
+              <strong>{count}</strong>
+              <small>{note}</small>
             </article>
-          );
-        })}
-        {collections.length === 0 && (
-          <p className="collection-empty">
-            No collections yet. Create one to start organizing your applications.
-          </p>
-        )}
-      </div>
-      <form className="new-collection-form" onSubmit={submitCollection}>
-        <label>
-          Collection name
-          <input
-            type="text"
-            maxLength="80"
-            placeholder="e.g. Jaipur Interviews"
-            value={newCollectionName}
-            onChange={(event) => setNewCollectionName(event.target.value)}
-            required
-          />
-        </label>
-        <button className="secondary" type="submit">
-          + Create collection
-        </button>
-        </form>
+          ))}
+        </div>
+
+        <div className="dashboard-content-grid">
+          <section className="dashboard-panel" aria-labelledby="upcoming-title">
+            <div className="redesign-section-heading">
+              <div>
+                <h3 id="upcoming-title">Coming up next</h3>
+                <p>Your next scheduled interview</p>
+              </div>
+              <button type="button" className="text-action" onClick={onViewCompanies}>
+                View all <span aria-hidden="true">→</span>
+              </button>
+            </div>
+            {upcomingCompanies.length ? (
+              <div className="upcoming-list">
+                {upcomingCompanies.map((company, index) => {
+                  const date = new Date(company.scheduled_at);
+                  const collection = collections.find(
+                    (item) => item.id === company.collection_id,
+                  );
+                  return (
+                    <article className="upcoming-item" key={company.id}>
+                      <div className="upcoming-date">
+                        <strong>
+                          {new Intl.DateTimeFormat(undefined, { day: "2-digit" }).format(date)}
+                        </strong>
+                        <span>
+                          {new Intl.DateTimeFormat(undefined, { month: "short" }).format(date)}
+                        </span>
+                      </div>
+                      <div className="upcoming-details">
+                        <strong>{company.name}</strong>
+                        <span>{collection?.name ?? "Interview"} · {company.rounds} round{company.rounds === 1 ? "" : "s"}</span>
+                      </div>
+                      <time dateTime={company.scheduled_at}>
+                        {new Intl.DateTimeFormat(undefined, { hour: "numeric", minute: "2-digit" }).format(date)}
+                      </time>
+                      {index === 0 && <span className="sr-only">Next interview</span>}
+                    </article>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="upcoming-empty">
+                <span aria-hidden="true">◷</span>
+                <strong>No interviews scheduled yet</strong>
+                <p>Add a date and time to a company to see it here.</p>
+              </div>
+            )}
+          </section>
+
+          <section className="dashboard-panel" aria-labelledby="progress-title">
+            <div className="redesign-section-heading">
+              <div>
+                <h3 id="progress-title">Application progress</h3>
+                <p>Across all {companies.length} {companies.length === 1 ? "company" : "companies"}</p>
+              </div>
+              <button type="button" className="text-action" onClick={onViewCompanies}>
+                Details <span aria-hidden="true">→</span>
+              </button>
+            </div>
+            <div className="progress-breakdown">
+              {STATUSES.map((status) => {
+                const label = STATUS_LABELS[status];
+                const percent = companies.length
+                  ? Math.round((statusCounts[status] / companies.length) * 100)
+                  : 0;
+                return (
+                  <div className="progress-row" key={status}>
+                    <span className={`status-dot ${status}`} />
+                    <span>{label}</span>
+                    <div className="progress-track">
+                      <span className={`progress-value ${status}`} style={{ width: `${percent}%` }} />
+                    </div>
+                    <strong>{statusCounts[status]}</strong>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        </div>
+
+        <section className="collection-section redesigned-collections" aria-labelledby="collections-title">
+          <div className="collection-section-heading">
+            <div>
+              <h3 id="collections-title">Your collections</h3>
+              <p>Applications organized by location and goal.</p>
+            </div>
+            <form className="new-collection-form" onSubmit={submitCollection}>
+              <label className="sr-only" htmlFor="new-collection-name">Collection name</label>
+              <input
+                id="new-collection-name"
+                type="text"
+                maxLength="80"
+                placeholder="New collection name"
+                value={newCollectionName}
+                onChange={(event) => setNewCollectionName(event.target.value)}
+                required
+              />
+              <button className="secondary-action" type="submit">＋ New collection</button>
+            </form>
+          </div>
+          <div className="collection-cards">
+            {collections.map((collection) => {
+              const collectionCompanies = companies.filter(
+                (company) => company.collection_id === collection.id,
+              );
+              const activeCount = collectionCompanies.filter(
+                (company) => company.status === "running",
+              ).length;
+              const percent = collectionCompanies.length
+                ? Math.round((activeCount / collectionCompanies.length) * 100)
+                : 0;
+              return (
+                <article className="collection-card" key={collection.id}>
+                  <button
+                    className="collection-open"
+                    type="button"
+                    onClick={() => onOpenCollection(collection)}
+                  >
+                    <span className="collection-card-icon" aria-hidden="true">⌖</span>
+                    <span className="collection-card-content">
+                      <strong>{collection.name}</strong>
+                      <span>{collectionCompanies.length} companies · {activeCount} interviews in progress</span>
+                    </span>
+                    <span className="collection-card-arrow" aria-hidden="true">→</span>
+                  </button>
+                  <div className="collection-progress-track" aria-hidden="true">
+                    <span style={{ width: `${percent}%` }} />
+                  </div>
+                  <div className="collection-card-footer">
+                    <span>{collectionCompanies.length ? `${activeCount} interviews in progress` : "Ready when you are"}</span>
+                    <button
+                      className="collection-delete"
+                      type="button"
+                      onClick={() => onDeleteCollection(collection)}
+                      aria-label={`Delete ${collection.name} collection`}
+                      title="Delete collection and its companies"
+                    >
+                      ×
+                    </button>
+                  </div>
+                </article>
+              );
+            })}
+            {collections.length === 0 && (
+              <p className="collection-empty">
+                No collections yet. Create one to start organizing your applications.
+              </p>
+            )}
+          </div>
+        </section>
     </section>
-  </section>
   );
 }
 
-function CompanyCard({ company, onMove, onEdit, onDelete, onDragStart, onDragEnd }) {
+function CompanyCard({ company, collection, onMove, onEdit, onDelete }) {
   return (
-    <article
-      className="company"
-      draggable
-      onDragStart={(event) => onDragStart(event, company.id)}
-      onDragEnd={onDragEnd}
-    >
-      <button
-        className="company-move"
-        type="button"
-        onClick={() => onMove(company.id)}
-        aria-label={`${company.name}, ${STATUS_LABELS[company.status]}. Click to move to the next status.`}
-        title="Click to move to the next status"
-      >
-        <span className="company-name">{company.name}</span>
-        <span className="rounds">
-          {company.rounds} interview{company.rounds === 1 ? "" : "s"}
+    <article className="company-row">
+        <span className="company-avatar" aria-hidden="true">
+          {company.name.slice(0, 2).toUpperCase()}
         </span>
-        {company.interview_language && (
-          <span className="interview-language">{company.interview_language}</span>
-        )}
-      </button>
-      <button
-        className="company-action"
+        <button
+          className="company-move"
+          type="button"
+          onClick={() => onMove(company.id)}
+          aria-label={`${company.name}: ${STATUS_LABELS[company.status]}. Move to ${STATUS_LABELS[NEXT_STATUS[company.status]]}.`}
+          title={`Move to ${STATUS_LABELS[NEXT_STATUS[company.status]]}`}
+        >
+          <span className="company-name">{company.name}</span>
+          <span className="company-meta">
+            {company.rounds} round{company.rounds === 1 ? "" : "s"}
+            {collection && <> · {collection.name}</>}
+            {company.interview_language && <> · {company.interview_language}</>}
+            {company.is_ai_interview && <span className="company-ai-badge">AI interview</span>}
+            {company.scheduled_at && (
+              <time className="company-scheduled-at" dateTime={company.scheduled_at}>
+                ◷ {formatScheduledAt(company.scheduled_at)}
+              </time>
+            )}
+          </span>
+        </button>
+        <button
+          className={`company-status ${company.status}`}
+          type="button"
+          onClick={() => onMove(company.id)}
+          aria-label={`Move ${company.name} from ${STATUS_LABELS[company.status]} to ${STATUS_LABELS[NEXT_STATUS[company.status]]}`}
+          title={`Move to ${STATUS_LABELS[NEXT_STATUS[company.status]]}`}
+        >
+          {STATUS_LABELS[company.status]}
+        </button>
+        <button
+          className="company-action"
         type="button"
         onClick={() => onEdit(company)}
         aria-label={`Edit interview details for ${company.name}`}
@@ -699,13 +833,17 @@ function App() {
   const [companyName, setCompanyName] = useState("");
   const [interviewCount, setInterviewCount] = useState("1");
   const [interviewLanguage, setInterviewLanguage] = useState("Java");
+  const [scheduledAt, setScheduledAt] = useState("");
   const [isAiInterview, setIsAiInterview] = useState(false);
+  const [companyStatus, setCompanyStatus] = useState("running");
   const [activeView, setActiveView] = useState("dashboard");
+  const [companyDialogOpen, setCompanyDialogOpen] = useState(false);
+  const [editingCompany, setEditingCompany] = useState(null);
+  const [companySearch, setCompanySearch] = useState("");
+  const [companyStatusFilter, setCompanyStatusFilter] = useState("all");
   const [activeCollectionId, setActiveCollectionId] = useState(null);
   const [selectedCollectionIds, setSelectedCollectionIds] = useState([]);
   const [message, setMessage] = useState("");
-  const [draggedId, setDraggedId] = useState(null);
-  const [dragOverStatus, setDragOverStatus] = useState(null);
 
   const [question, setQuestion] = useState("");
   const [questionCompany, setQuestionCompany] = useState("");
@@ -994,20 +1132,17 @@ function App() {
     [companies, activeCollection],
   );
 
-  const groups = useMemo(
-    () =>
-      Object.fromEntries(
-        STATUSES.map((status) => [
-          status,
-          collectionCompanies.filter((company) => company.status === status),
-        ]),
-      ),
-    [collectionCompanies],
-  );
-  const aiInterviewCompanies = useMemo(
-    () => collectionCompanies.filter((company) => company.is_ai_interview),
-    [collectionCompanies],
-  );
+  const visibleCompanies = useMemo(() => {
+    const search = companySearch.trim().toLowerCase();
+    return [...collectionCompanies]
+      .filter(
+        (company) =>
+          (companyStatusFilter === "all" ||
+            company.status === companyStatusFilter) &&
+          (!search || company.name.toLowerCase().includes(search)),
+      )
+      .sort((left, right) => left.name.localeCompare(right.name));
+  }, [collectionCompanies, companySearch, companyStatusFilter]);
 
   const visibleSkills = useMemo(() => {
     const search = skillSearch.trim().toLowerCase();
@@ -1022,7 +1157,39 @@ function App() {
       .reverse();
   }, [skills, skillSearch, skillFilter]);
 
-  async function addCompany(event) {
+  function openAddCompany() {
+    setEditingCompany(null);
+    setCompanyName("");
+    setInterviewCount("1");
+    setInterviewLanguage("Java");
+    setScheduledAt("");
+    setIsAiInterview(false);
+    setCompanyStatus("running");
+    setSelectedCollectionIds(
+      activeCollectionId ? [activeCollectionId] : collections.slice(0, 1).map((item) => item.id),
+    );
+    setMessage("");
+    setCompanyDialogOpen(true);
+  }
+
+  function openEditCompany(company) {
+    setEditingCompany(company);
+    setCompanyName(company.name);
+    setInterviewCount(String(company.rounds));
+    setInterviewLanguage(company.interview_language ?? "");
+    setScheduledAt(toDateTimeInputValue(company.scheduled_at));
+    setIsAiInterview(company.is_ai_interview);
+    setCompanyStatus(company.status);
+    setMessage("");
+    setCompanyDialogOpen(true);
+  }
+
+  function closeCompanyDialog() {
+    setCompanyDialogOpen(false);
+    setEditingCompany(null);
+  }
+
+  async function saveCompany(event) {
     event.preventDefault();
     const name = companyName.trim();
     const rounds = Number(interviewCount);
@@ -1035,6 +1202,46 @@ function App() {
       setMessage("Interview count must be between 1 and 20.");
       return;
     }
+    if (
+      interviewLanguage &&
+      !INTERVIEW_LANGUAGES.includes(interviewLanguage)
+    ) {
+      setMessage("Interview language must be Java, Python, or blank.");
+      return;
+    }
+    const scheduled_at = toScheduledAt(scheduledAt);
+    if (scheduledAt && scheduled_at === null) {
+      setMessage("Enter a valid interview date and time, or leave it blank.");
+      return;
+    }
+
+    if (editingCompany) {
+      const updates = {
+        name,
+        rounds,
+        status: companyStatus,
+        interview_language: interviewLanguage || null,
+        scheduled_at,
+        is_ai_interview: isAiInterview,
+      };
+      if (user) {
+        const result = await runCloudMutation(() =>
+          updateCompany(editingCompany.id, updates),
+        );
+        if (!result.ok) return;
+      }
+      setCompanies((current) =>
+        current.map((company) =>
+          company.id === editingCompany.id
+            ? { ...company, ...updates }
+            : company,
+        ),
+      );
+      setMessage(`${name}: interview details updated.`);
+      closeCompanyDialog();
+      return;
+    }
+
     const targetCollections = collections.filter((collection) =>
       selectedCollectionIds.includes(collection.id),
     );
@@ -1050,9 +1257,10 @@ function App() {
     const newCompany = {
       name,
       rounds,
-      status: "running",
+      status: companyStatus,
       is_ai_interview: isAiInterview,
-      interview_language: interviewLanguage,
+      interview_language: interviewLanguage || null,
+      scheduled_at,
     };
     let savedCompanies = targetCollections.map((collection, index) => ({
       ...newCompany,
@@ -1080,7 +1288,10 @@ function App() {
     setCompanyName("");
     setInterviewCount("1");
     setInterviewLanguage("Java");
+    setScheduledAt("");
     setIsAiInterview(false);
+    setCompanyStatus("running");
+    closeCompanyDialog();
   }
 
   async function moveCompany(id, targetStatus) {
@@ -1103,49 +1314,6 @@ function App() {
     setMessage(`${company.name} moved to ${STATUS_LABELS[status]}.`);
   }
 
-  async function editCompany(company) {
-    const entered = window.prompt(
-      `How many interviews did you have with ${company.name}?`,
-      String(company.rounds),
-    );
-    if (entered === null) return;
-
-    const rounds = Number(entered);
-    if (!Number.isInteger(rounds) || rounds < 1 || rounds > 20) {
-      setMessage("Interview count must be a whole number between 1 and 20.");
-      return;
-    }
-
-    const enteredLanguage = window.prompt(
-      `Interview language for ${company.name}? Enter Java, Python, or leave blank.`,
-      company.interview_language ?? "",
-    );
-    if (enteredLanguage === null) return;
-    const interview_language = enteredLanguage.trim() || null;
-    if (
-      interview_language !== null &&
-      !INTERVIEW_LANGUAGES.includes(interview_language)
-    ) {
-      setMessage("Interview language must be Java or Python, or blank.");
-      return;
-    }
-
-    if (user) {
-      const result = await runCloudMutation(() =>
-        updateCompany(company.id, { rounds, interview_language }),
-      );
-      if (!result.ok) return;
-    }
-    setCompanies((current) =>
-      current.map((item) =>
-        item.id === company.id
-          ? { ...item, rounds, interview_language }
-          : item,
-      ),
-    );
-    setMessage(`${company.name}: interview details updated.`);
-  }
-
   async function deleteCompany(company) {
     if (!window.confirm(`Delete ${company.name} from your job hunt?`)) return;
     if (user) {
@@ -1158,23 +1326,6 @@ function App() {
       current.filter((item) => item.id !== company.id),
     );
     setMessage(`${company.name} deleted.`);
-  }
-
-  function handleDragStart(event, id) {
-    setDraggedId(id);
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", String(id));
-  }
-
-  function handleDrop(event, status) {
-    event.preventDefault();
-    const droppedId = event.dataTransfer.getData("text/plain") || draggedId;
-    const company = companies.find(
-      (item) => String(item.id) === String(droppedId),
-    );
-    if (company) moveCompany(company.id, status);
-    setDraggedId(null);
-    setDragOverStatus(null);
   }
 
   async function addQuestion(event) {
@@ -1357,6 +1508,30 @@ function App() {
     }
   }
 
+  function navigateToSection(section) {
+    if (section === "dashboard") {
+      setActiveView("dashboard");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    setActiveView("board");
+    window.setTimeout(() => {
+      document.getElementById(section)?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }, 0);
+  }
+
+  useEffect(() => {
+    if (!companyDialogOpen) return undefined;
+    function handleKeyDown(event) {
+      if (event.key === "Escape") closeCompanyDialog();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [companyDialogOpen]);
+
   if (supabase && authLoading) {
     return (
       <main className="auth-page">
@@ -1413,49 +1588,89 @@ function App() {
   }
 
   return (
-    <main className="app">
-      <header className="header">
-        <div>
-          <div className="eyebrow">JOB HUNT QUEST</div>
-          <h1>Journey to Company #100 🎯</h1>
+    <div className="workspace-shell">
+      <aside className="workspace-sidebar">
+        <div className="workspace-brand">
+          <span className="workspace-brand-mark" aria-hidden="true">J</span>
+          <span className="workspace-brand-copy">
+            <strong>JOB HUNT QUEST</strong>
+            <small>Your next chapter starts here</small>
+          </span>
         </div>
-        <div className="counter" aria-label={`${companies.length} of 100 companies`}>
-          <strong>{companies.length} / 100</strong>
-          <span>companies</span>
-        </div>
-        {user && (
-          <div className="account-actions">
-            <span>{user.email}</span>
+        <span className="workspace-nav-label">WORKSPACE</span>
+        <nav className="workspace-nav" aria-label="Main navigation">
+          <button
+            type="button"
+            className={activeView === "dashboard" ? "active" : ""}
+            aria-label="Dashboard"
+            aria-current={activeView === "dashboard" ? "page" : undefined}
+            onClick={() => navigateToSection("dashboard")}
+          >
+            <span aria-hidden="true">⌂</span><span className="workspace-nav-text">Dashboard</span>
+          </button>
+          <button
+            type="button"
+            className={activeView === "board" ? "active" : ""}
+            aria-label="Companies"
+            aria-current={activeView === "board" ? "page" : undefined}
+            onClick={() => navigateToSection("companies")}
+          >
+            <span aria-hidden="true">▤</span><span className="workspace-nav-text">Companies</span>
+          </button>
+          <button type="button" aria-label="Interview prep" onClick={() => navigateToSection("interview-prep")}>
+            <span aria-hidden="true">◷</span><span className="workspace-nav-text">Interview prep</span>
+          </button>
+          <button type="button" aria-label="Skills" onClick={() => navigateToSection("skills")}>
+            <span aria-hidden="true">✳</span><span className="workspace-nav-text">Skills</span>
+          </button>
+        </nav>
+        <div className="workspace-account">
+          <span className="workspace-avatar" aria-hidden="true">
+            {(user?.email?.[0] ?? "N").toUpperCase()}
+          </span>
+          <span className="workspace-account-copy">
+            <strong>{user?.email ?? "Local workspace"}</strong>
+            <small>{user ? "Personal workspace" : "Saved in this browser"}</small>
+          </span>
+          {user && (
             <button
-              className="secondary sign-out-button"
+              className="workspace-signout"
               type="button"
               onClick={signOut}
               disabled={signingOut}
             >
-              {signingOut ? <CatLoader label="Signing out..." compact /> : "Sign out"}
+              {signingOut ? "…" : "Sign out"}
             </button>
-          </div>
-        )}
-      </header>
+          )}
+        </div>
+      </aside>
 
-      <nav className="app-navigation" aria-label="Main navigation">
-        <button
-          className={activeView === "dashboard" ? "active" : ""}
-          type="button"
-          aria-current={activeView === "dashboard" ? "page" : undefined}
-          onClick={() => setActiveView("dashboard")}
-        >
-          Dashboard
-        </button>
-        <button
-          className={activeView === "board" ? "active" : ""}
-          type="button"
-          aria-current={activeView === "board" ? "page" : undefined}
-          onClick={() => setActiveView("board")}
-        >
-          Company board
-        </button>
-      </nav>
+      <main className="workspace-main">
+        <div className="workspace-topbar">
+          <div>Workspace <span aria-hidden="true">/</span> <strong>{activeView === "dashboard" ? "Overview" : activeCollection?.name ?? "Companies"}</strong></div>
+          <div className="workspace-topbar-actions">
+            {saving || (cloudLoading && hasUserCache) ? (
+              <span className="workspace-sync"><i />Syncing changes</span>
+            ) : (
+              <span className="workspace-sync"><i />{user ? "Changes synced" : "Saved on this device"}</span>
+            )}
+            {user && (
+              <button
+                className="workspace-top-signout"
+                type="button"
+                onClick={signOut}
+                disabled={signingOut}
+              >
+                {signingOut ? "Signing out..." : "Sign out"}
+              </button>
+            )}
+            {user && (
+              <span className="workspace-avatar workspace-top-avatar" aria-hidden="true">
+                {(user.email?.[0] ?? "N").toUpperCase()}
+              </span>
+            )}
+          </div>
+        </div>
 
       {saving && (
         <div className="save-loading">
@@ -1483,9 +1698,26 @@ function App() {
       )}
 
       {!supabase && (
-        <div className="setup-notice" role="status">
+        <div className="setup-notice workspace-setup-notice" role="status">
           Local-only mode: add your Supabase project URL and public key to enable
           accounts and cloud sync.
+        </div>
+      )}
+
+      {message && !companyDialogOpen && (
+        <div
+          className={`workspace-message${message.startsWith("Could not save") ? " error" : ""}`}
+          role={message.startsWith("Could not save") ? "alert" : "status"}
+          aria-live="polite"
+        >
+          <span>{message}</span>
+          <button
+            type="button"
+            onClick={() => setMessage("")}
+            aria-label="Dismiss message"
+          >
+            ×
+          </button>
         </div>
       )}
 
@@ -1497,196 +1729,99 @@ function App() {
             setActiveCollectionId(collection.id);
             setSelectedCollectionIds([collection.id]);
             setActiveView("board");
+            window.scrollTo({ top: 0, behavior: "smooth" });
           }}
           onCreateCollection={addCollection}
           onDeleteCollection={removeCollection}
+          onAddCompany={() => {
+            setActiveView("board");
+            openAddCompany();
+          }}
+          onViewCompanies={() => {
+            setActiveView("board");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
         />
       )}
 
       {activeView === "board" && (
         <>
-      <div className="board-heading">
-        <button
-          className="dashboard-link"
-          type="button"
-          onClick={() => setActiveView("dashboard")}
-        >
-          ← Dashboard
-        </button>
-        <div>
-          <div className="eyebrow">INTERVIEW COLLECTION</div>
-          <h2>{activeCollection?.name ?? "Select a collection"}</h2>
-        </div>
-        <span>{collectionCompanies.length} companies</span>
-      </div>
-      <div
-        className="progress"
-        role="progressbar"
-        aria-label="Companies tracked"
-        aria-valuemin="0"
-        aria-valuemax="100"
-        aria-valuenow={Math.min(companies.length, 100)}
-      >
-        <div style={{ width: `${Math.min(companies.length, 100)}%` }} />
-      </div>
-
-      <section className="form-card" aria-label="Add a company">
-        <form className="company-form" onSubmit={addCompany}>
-          <label>
-            Company name
-            <input
-              type="text"
-              placeholder="e.g. Infosys"
-              maxLength="80"
-              autoComplete="off"
-              required
-              value={companyName}
-              onChange={(event) => setCompanyName(event.target.value)}
-            />
-          </label>
-          <label>
-            No. of interviews
-            <input
-              type="number"
-              min="1"
-              max="20"
-              required
-              value={interviewCount}
-              onChange={(event) => setInterviewCount(event.target.value)}
-            />
-          </label>
-          <label>
-            Interview language
-            <select
-              value={interviewLanguage}
-              onChange={(event) => setInterviewLanguage(event.target.value)}
-            >
-              {INTERVIEW_LANGUAGES.map((language) => (
-                <option key={language} value={language}>
-                  {language}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="ai-interview-option">
-            <input
-              type="checkbox"
-              checked={isAiInterview}
-              onChange={(event) => setIsAiInterview(event.target.checked)}
-            />
-            AI interview
-          </label>
-          <fieldset className="collection-picker">
-            <legend>Add to collections</legend>
-            {collections.map((collection) => (
-              <label key={collection.id}>
+        <section className="pipeline-page" id="companies" aria-label="Company pipeline">
+          <div className="pipeline-heading">
+            <div>
+              <div className="eyebrow">{activeCollection?.name ?? "YOUR COMPANIES"}</div>
+              <h1>Company pipeline</h1>
+              <p>Keep every application and interview detail in one place.</p>
+            </div>
+            <button className="primary-action" type="button" onClick={openAddCompany}>
+              <span aria-hidden="true">＋</span> Add a company
+            </button>
+          </div>
+          <section className="pipeline-panel">
+            <div className="pipeline-toolbar">
+              <label className="company-search">
+                <span aria-hidden="true">⌕</span>
                 <input
-                  type="checkbox"
-                  checked={selectedCollectionIds.includes(collection.id)}
-                  onChange={(event) =>
-                    setSelectedCollectionIds((current) =>
-                      event.target.checked
-                        ? [...current, collection.id]
-                        : current.filter((id) => id !== collection.id),
-                    )
-                  }
+                  type="search"
+                  placeholder="Search companies..."
+                  aria-label="Search companies"
+                  value={companySearch}
+                  onChange={(event) => setCompanySearch(event.target.value)}
                 />
-                {collection.name}
               </label>
-            ))}
-          </fieldset>
-          <button className="add-btn" type="submit">
-            {saving ? "Saving..." : "+ Add Company"}
-          </button>
-        </form>
-        <div className="message" aria-live="polite">
-          {message}
-        </div>
-        <div className="saved-state">
-          {user
-            ? `✓ Data synced to your account (${user.email})`
-            : "✓ Your data is saved in this browser"}
-        </div>
-      </section>
-
-      <section className="stacks" aria-label="Company application statuses">
-        {STATUSES.map((status) => (
-          <div className="stack-wrap" key={status}>
-            <div
-              className={`deck ${status}${dragOverStatus === status ? " drag-over" : ""}`}
-              onDragOver={(event) => {
-                event.preventDefault();
-                event.dataTransfer.dropEffect = "move";
-                setDragOverStatus(status);
-              }}
-              onDragLeave={(event) => {
-                if (!event.currentTarget.contains(event.relatedTarget)) {
-                  setDragOverStatus(null);
-                }
-              }}
-              onDrop={(event) => handleDrop(event, status)}
-              aria-label={`${STATUS_LABELS[status]} companies`}
-            >
-              {groups[status].length ? (
-                [...groups[status]].reverse().map((company) => (
+              <span className="pipeline-count">
+                {visibleCompanies.length} of {collectionCompanies.length} companies
+              </span>
+            </div>
+            <div className="company-filters" aria-label="Filter companies by status">
+              <button
+                type="button"
+                className={companyStatusFilter === "all" ? "active" : ""}
+                aria-pressed={companyStatusFilter === "all"}
+                onClick={() => setCompanyStatusFilter("all")}
+              >
+                All <span>{collectionCompanies.length}</span>
+              </button>
+              {STATUSES.map((status) => (
+                <button
+                  key={status}
+                  type="button"
+                  className={companyStatusFilter === status ? "active" : ""}
+                  aria-pressed={companyStatusFilter === status}
+                  onClick={() => setCompanyStatusFilter(status)}
+                >
+                  {STATUS_LABELS[status]}{" "}
+                  <span>{collectionCompanies.filter((company) => company.status === status).length}</span>
+                </button>
+              ))}
+            </div>
+            <div className="company-list" aria-live="polite">
+              {visibleCompanies.length ? (
+                visibleCompanies.map((company) => (
                   <CompanyCard
                     key={company.id}
                     company={company}
+                    collection={collections.find((item) => item.id === company.collection_id)}
                     onMove={moveCompany}
-                    onEdit={editCompany}
+                    onEdit={openEditCompany}
                     onDelete={deleteCompany}
-                    onDragStart={handleDragStart}
-                    onDragEnd={() => {
-                      setDraggedId(null);
-                      setDragOverStatus(null);
-                    }}
                   />
                 ))
               ) : (
-                <div className="empty">No companies yet</div>
+                <div className="pipeline-empty">
+                  {collectionCompanies.length
+                    ? "No companies match your search or filter."
+                    : "No companies in this collection yet. Add one to get started."}
+                </div>
               )}
             </div>
-            <div className="label">
-              {STATUS_LABELS[status]}{" "}
-              <span className="count">({groups[status].length})</span>
-            </div>
-          </div>
-        ))}
-        <div className="stack-wrap">
-          <div className="deck ai-interview" aria-label="AI interview companies">
-            {aiInterviewCompanies.length ? (
-              [...aiInterviewCompanies].reverse().map((company) => (
-                  <CompanyCard
-                    key={company.id}
-                    company={company}
-                    onMove={moveCompany}
-                    onEdit={editCompany}
-                    onDelete={deleteCompany}
-                    onDragStart={handleDragStart}
-                    onDragEnd={() => {
-                      setDraggedId(null);
-                      setDragOverStatus(null);
-                    }}
-                  />
-                ))
-            ) : (
-              <div className="empty">No AI interviews yet</div>
-            )}
-          </div>
-          <div className="label">
-            AI interview{" "}
-            <span className="count">
-              ({aiInterviewCompanies.length})
-            </span>
-          </div>
-        </div>
-      </section>
-      <p className="hint">
-        Click a company card to move it: Scheduled → Selected → Pending → Not
-        Selected → Scheduled
-      </p>
+          </section>
+          <p className="pipeline-hint">
+            Select a status on a company to move it through your pipeline.
+          </p>
+        </section>
 
-      <section className="question-bank">
+      <section className="question-bank" id="interview-prep">
         <SectionHeading
           title="🧠 Interview Question Bank"
           subtitle="Save the questions companies ask you and build your own preparation bank."
@@ -1786,7 +1921,7 @@ function App() {
         </div>
       </section>
 
-      <section className="skill-bank">
+      <section className="skill-bank" id="skills">
         <SectionHeading
           title="🛠️ Skills Tracker"
           subtitle="Capture skills you come across while preparing or interviewing, and track your learning progress."
@@ -1947,7 +2082,174 @@ function App() {
 
         </>
       )}
-    </main>
+      </main>
+
+      <nav className="mobile-workspace-nav" aria-label="Mobile navigation">
+        <button
+          type="button"
+          className={activeView === "dashboard" ? "active" : ""}
+          onClick={() => navigateToSection("dashboard")}
+        >
+          <span aria-hidden="true">⌂</span>Home
+        </button>
+        <button
+          type="button"
+          className={activeView === "board" ? "active" : ""}
+          onClick={() => navigateToSection("companies")}
+        >
+          <span aria-hidden="true">▤</span>Companies
+        </button>
+        <button type="button" onClick={() => navigateToSection("interview-prep")}>
+          <span aria-hidden="true">◷</span>Prep
+        </button>
+        <button type="button" onClick={() => navigateToSection("skills")}>
+          <span aria-hidden="true">✳</span>Skills
+        </button>
+      </nav>
+
+      {companyDialogOpen && (
+        <div
+          className="company-dialog-overlay"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) closeCompanyDialog();
+          }}
+        >
+          <form
+            className="company-dialog"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="company-dialog-title"
+            onSubmit={saveCompany}
+          >
+            <div className="company-dialog-heading">
+              <div>
+                <h2 id="company-dialog-title">
+                  {editingCompany ? "Edit company details" : "Add a company"}
+                </h2>
+                <p>
+                  {editingCompany
+                    ? "Keep your application details up to date."
+                    : "Add an application to your interview pipeline."}
+                </p>
+              </div>
+              <button
+                type="button"
+                className="dialog-close"
+                onClick={closeCompanyDialog}
+                aria-label="Close dialog"
+              >
+                ×
+              </button>
+            </div>
+            <div className="company-dialog-fields">
+              <label className="dialog-field dialog-field-full">
+                Company name
+                <input
+                  type="text"
+                  placeholder="e.g. Infosys"
+                  maxLength="80"
+                  autoComplete="organization"
+                  required
+                  autoFocus
+                  readOnly={Boolean(editingCompany)}
+                  value={companyName}
+                  onChange={(event) => setCompanyName(event.target.value)}
+                />
+              </label>
+              <label className="dialog-field">
+                Application status
+                <select
+                  value={companyStatus}
+                  onChange={(event) => setCompanyStatus(event.target.value)}
+                >
+                  {STATUSES.map((status) => (
+                    <option key={status} value={status}>{STATUS_LABELS[status]}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="dialog-field">
+                Interview rounds
+                <input
+                  type="number"
+                  min="1"
+                  max="20"
+                  required
+                  value={interviewCount}
+                  onChange={(event) => setInterviewCount(event.target.value)}
+                />
+              </label>
+              <label className="dialog-field">
+                Interview date &amp; time
+                <input
+                  type="datetime-local"
+                  value={scheduledAt}
+                  onChange={(event) => setScheduledAt(event.target.value)}
+                />
+              </label>
+              <label className="dialog-field">
+                Interview language
+                <select
+                  value={interviewLanguage}
+                  onChange={(event) => setInterviewLanguage(event.target.value)}
+                >
+                  <option value="">Not specified</option>
+                  {INTERVIEW_LANGUAGES.map((language) => (
+                    <option key={language} value={language}>{language}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="dialog-checkbox">
+                <input
+                  type="checkbox"
+                  checked={isAiInterview}
+                  onChange={(event) => setIsAiInterview(event.target.checked)}
+                />
+                AI interview
+              </label>
+              {!editingCompany && (
+                <fieldset className="dialog-collections">
+                  <legend>Add to collections</legend>
+                  {collections.map((collection) => (
+                    <label key={collection.id}>
+                      <input
+                        type="checkbox"
+                        checked={selectedCollectionIds.includes(collection.id)}
+                        onChange={(event) =>
+                          setSelectedCollectionIds((current) =>
+                            event.target.checked
+                              ? [...current, collection.id]
+                              : current.filter((id) => id !== collection.id),
+                          )
+                        }
+                      />
+                      {collection.name}
+                    </label>
+                  ))}
+                </fieldset>
+              )}
+            </div>
+            {message && (
+              <p className="dialog-message" role="status" aria-live="polite">
+                {message}
+              </p>
+            )}
+            <div className="company-dialog-actions">
+              <button
+                className="secondary-action"
+                type="button"
+                onClick={closeCompanyDialog}
+              >
+                Cancel
+              </button>
+              <button className="primary-action" type="submit" disabled={saving}>
+                {saving ? "Saving..." : editingCompany ? "Save changes" : "Add company"}
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
   );
 }
 

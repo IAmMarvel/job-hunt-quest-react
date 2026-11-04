@@ -28,6 +28,12 @@ To add the **Java/Python interview language** field to an existing Supabase proj
 
 To add **interview collections** to an existing Supabase project, run [`supabase/add_collections.sql`](./supabase/add_collections.sql) in the SQL Editor. It creates a “Bangalore Interviews” collection for each existing account and moves that account’s unassigned companies into it. New projects get collections when you run [`supabase/schema.sql`](./supabase/schema.sql).
 
+To add the optional **scheduled interview date and time** to an existing Supabase project, run [`supabase/add_scheduled_interview_at.sql`](./supabase/add_scheduled_interview_at.sql) in the SQL Editor. New projects get this column when you run [`supabase/schema.sql`](./supabase/schema.sql).
+
 The frontend key is public by design; Row Level Security policies in the schema restrict every record to its owning authenticated user. Never add a Supabase service-role key to the frontend or GitHub Pages build.
 
 The app is configured for GitHub Pages at `/job-hunt-quest-react/`. Push to `main` to build and deploy through GitHub Actions.
+
+## Deploy to Netlify
+
+The repository includes [`netlify.toml`](./netlify.toml), which configures `npm run build`, the `dist` publish directory, and Node.js 22. In Netlify, import this repository and add `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` as site environment variables. After the first deploy, add the Netlify site URL to Supabase Authentication's allowed redirect URLs and, if desired, set it as the Supabase Site URL.

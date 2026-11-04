@@ -79,7 +79,7 @@ export async function fetchUserData() {
       .order("created_at"),
     supabase
       .from(TABLES.companies)
-      .select("id,name,rounds,status,is_ai_interview,interview_language,collection_id")
+      .select("id,name,rounds,status,is_ai_interview,interview_language,scheduled_at,collection_id")
       .order("created_at"),
     supabase
       .from(TABLES.questions)
@@ -167,6 +167,7 @@ export async function importBrowserData(userId, data, collectionId) {
         company.interview_language === "Python"
           ? company.interview_language
           : null,
+      scheduled_at: company.scheduled_at ?? null,
     }))
     .filter((company) => {
       const name = company.name.trim().toLocaleLowerCase();
