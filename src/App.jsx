@@ -25,7 +25,9 @@ const STORAGE_KEYS = {
   questions: "job-hunt-quest-questions-v1",
   motivations: "job-hunt-quest-motivations-v1",
   skills: "job-hunt-quest-skills-v1",
+  target: "job-hunt-quest-target-v1",
 };
+const DEFAULT_COMPANY_TARGET = 100;
 const BROWSER_IMPORT_KEY = "job-hunt-quest-browser-import-v1";
 const USER_CACHE_KEY = "job-hunt-quest-user-cache-v1";
 
@@ -105,6 +107,16 @@ function loadFromStorage(key, validate, fallback) {
   } catch (error) {
     console.warn(`Could not restore ${key}:`, error);
     return fallback;
+  }
+}
+
+function loadCompanyTarget() {
+  try {
+    const saved = Number(localStorage.getItem(STORAGE_KEYS.target));
+    return Number.isInteger(saved) && saved > 0 ? saved : DEFAULT_COMPANY_TARGET;
+  } catch (error) {
+    console.warn("Could not restore company target:", error);
+    return DEFAULT_COMPANY_TARGET;
   }
 }
 
@@ -525,12 +537,14 @@ function SectionHeading({ title, subtitle, aside }) {
 
 function DashboardView({
   companies,
+  companyTarget,
   collections,
   onOpenCollection,
   onCreateCollection,
   onDeleteCollection,
   onAddCompany,
   onViewCompanies,
+  onSaveCompanyTarget,
 }) {
   const statusCounts = Object.fromEntries(
     STATUSES.map((status) => [
@@ -552,6 +566,8 @@ function DashboardView({
     .slice(0, 3);
   const scheduledCount = companies.filter((company) => company.scheduled_at).length;
   const [newCollectionName, setNewCollectionName] = useState("");
+  const [editingTarget, setEditingTarget] = useState(false);
+  const [targetValue, setTargetValue] = useState(String(companyTarget));
 
   function submitCollection(event) {
     event.preventDefault();
@@ -560,6 +576,16 @@ function DashboardView({
     onCreateCollection(name);
     setNewCollectionName("");
   }
+
+  function submitTarget(event) {
+    event.preventDefault();
+    const target = Number(targetValue);
+    if (!Number.isInteger(target) || target < 1 || target > 10_000) return;
+    onSaveCompanyTarget(target);
+    setEditingTarget(false);
+  }
+
+  const targetProgress = Math.min(100, Math.round((companies.length / companyTarget) * 100));
 
   return (
     <section className="dashboard-page redesigned-dashboard" aria-label="Job search dashboard">
@@ -591,6 +617,73 @@ function DashboardView({
             </article>
           ))}
         </div>
+
+        <section className="company-goal-panel" aria-labelledby="company-goal-title">
+          <div className="company-goal-heading">
+            <div>
+              <div className="eyebrow">YOUR MILESTONE</div>
+              <h3 id="company-goal-title">Company application goal</h3>
+            </div>
+            {!editingTarget && (
+              <button
+                type="button"
+                className="text-action"
+                onClick={() => {
+                  setTargetValue(String(companyTarget));
+                  setEditingTarget(true);
+                }}
+              >
+                Set target
+              </button>
+            )}
+          </div>
+          {editingTarget ? (
+            <form className="company-goal-edit" onSubmit={submitTarget}>
+              <label htmlFor="company-target">Target companies</label>
+              <input
+                id="company-target"
+                type="number"
+                min="1"
+                max="10000"
+                step="1"
+                required
+                value={targetValue}
+                onChange={(event) => setTargetValue(event.target.value)}
+              />
+              <button className="primary-action" type="submit">Save target</button>
+              <button
+                className="secondary-action"
+                type="button"
+                onClick={() => setEditingTarget(false)}
+              >
+                Cancel
+              </button>
+            </form>
+          ) : (
+            <>
+              <div className="company-goal-summary">
+                <strong>{companies.length}</strong>
+                <span>of {companyTarget} companies</span>
+                <b>{targetProgress}%</b>
+              </div>
+              <div
+                className="company-goal-track"
+                role="progressbar"
+                aria-label="Company application goal"
+                aria-valuemin="0"
+                aria-valuemax={companyTarget}
+                aria-valuenow={Math.min(companies.length, companyTarget)}
+              >
+                <span style={{ width: `${targetProgress}%` }} />
+              </div>
+              <p className="company-goal-caption">
+                {companies.length >= companyTarget
+                  ? "You reached your company application goal!"
+                  : `${companyTarget - companies.length} more ${companyTarget - companies.length === 1 ? "company" : "companies"} to reach your goal`}
+              </p>
+            </>
+          )}
+        </section>
 
         <div className="dashboard-content-grid">
           <section className="dashboard-panel" aria-labelledby="upcoming-title">
@@ -809,6 +902,7 @@ function App() {
     () => (supabase ? [] : loadCompanies()),
     !supabase,
   );
+  const [companyTarget, setCompanyTarget] = useState(loadCompanyTarget);
   const [collections, setCollections] = usePersistentState(
     STORAGE_KEYS.collections,
     () => (supabase ? [] : loadCollections()),
@@ -875,6 +969,14 @@ function App() {
   }
 
   const user = session?.user ?? null;
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.target, JSON.stringify(companyTarget));
+    } catch (error) {
+      console.warn("Could not save company target:", error);
+    }
+  }, [companyTarget]);
 
   useEffect(() => {
     if (!collections.length) {
@@ -1249,8 +1351,8 @@ function App() {
       setMessage("Select at least one collection for this company.");
       return;
     }
-    if (companies.length + targetCollections.length > 100) {
-      setMessage("🎉 Company #100 reached!");
+    if (companies.length + targetCollections.length > companyTarget) {
+      setMessage(`Your target of ${companyTarget} companies is reached.`);
       return;
     }
 
@@ -1724,6 +1826,7 @@ function App() {
       {activeView === "dashboard" && (
         <DashboardView
           companies={companies}
+          companyTarget={companyTarget}
           collections={collections}
           onOpenCollection={(collection) => {
             setActiveCollectionId(collection.id);
@@ -1741,6 +1844,7 @@ function App() {
             setActiveView("board");
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
+          onSaveCompanyTarget={setCompanyTarget}
         />
       )}
 

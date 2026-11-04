@@ -1929,6 +1929,105 @@ textarea:focus {
   font-size: 9px;
 }
 
+.company-goal-panel {
+  margin-bottom: 15px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: #fff;
+}
+
+.company-goal-heading,
+.company-goal-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.company-goal-heading .eyebrow {
+  font-size: 8px;
+}
+
+.company-goal-heading h3 {
+  margin: 3px 0 0;
+  font-size: 12px;
+}
+
+.company-goal-summary {
+  justify-content: flex-start;
+  margin-top: 13px;
+}
+
+.company-goal-summary strong {
+  font-size: 22px;
+  letter-spacing: -0.04em;
+}
+
+.company-goal-summary span {
+  color: var(--muted);
+  font-size: 10px;
+}
+
+.company-goal-summary b {
+  margin-left: auto;
+  color: var(--accent);
+  font-size: 10px;
+}
+
+.company-goal-track {
+  height: 7px;
+  margin-top: 8px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: #edf0ec;
+}
+
+.company-goal-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 180ms ease;
+}
+
+.company-goal-caption {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 9px;
+}
+
+.company-goal-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.company-goal-edit label {
+  color: #526057;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.company-goal-edit input {
+  width: 100px;
+  min-height: 36px;
+  margin: 0;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: #fff;
+  font-size: 11px;
+}
+
+.company-goal-edit .primary-action,
+.company-goal-edit .secondary-action {
+  min-height: 35px;
+  padding: 0 10px;
+  font-size: 10px;
+}
+
 .dashboard-content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.5fr) minmax(270px, 0.9fr);
@@ -2748,6 +2847,22 @@ textarea:focus {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     margin-bottom: 12px;
+  }
+
+  .company-goal-panel {
+    padding: 12px;
+  }
+
+  .company-goal-edit {
+    flex-wrap: wrap;
+  }
+
+  .company-goal-edit label {
+    width: calc(100% - 112px);
+  }
+
+  .company-goal-edit input {
+    width: 100px;
   }
 
   .dashboard-stat {
