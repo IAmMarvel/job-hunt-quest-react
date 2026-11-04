@@ -24,6 +24,8 @@ To remove company duplicates already stored in Supabase, run [`supabase/dedupe_c
 
 To enable the **AI interview** checkbox and stack for an existing Supabase project, run [`supabase/enable_ai_interview.sql`](./supabase/enable_ai_interview.sql) in the SQL Editor. New projects get this column when you run [`supabase/schema.sql`](./supabase/schema.sql).
 
+To add the **Java/Python interview language** field to an existing Supabase project, run [`supabase/add_interview_language.sql`](./supabase/add_interview_language.sql) in the SQL Editor. New projects get this column when you run [`supabase/schema.sql`](./supabase/schema.sql). Existing companies remain unset until you edit them.
+
 The frontend key is public by design; Row Level Security policies in the schema restrict every record to its owning authenticated user. Never add a Supabase service-role key to the frontend or GitHub Pages build.
 
 The app is configured for GitHub Pages at `/job-hunt-quest-react/`. Push to `main` to build and deploy through GitHub Actions.

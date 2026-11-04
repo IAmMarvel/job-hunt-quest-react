@@ -27,6 +27,7 @@ const BROWSER_IMPORT_KEY = "job-hunt-quest-browser-import-v1";
 const USER_CACHE_KEY = "job-hunt-quest-user-cache-v1";
 
 const STATUSES = ["selected", "running", "pending", "rejected"];
+const INTERVIEW_LANGUAGES = ["Java", "Python"];
 const NEXT_STATUS = {
   running: "selected",
   selected: "pending",
@@ -115,6 +116,11 @@ function loadCompanies(fallback = INITIAL_COMPANIES) {
       rounds: Math.max(1, Math.min(20, Number(company.rounds) || 1)),
       status: company.status,
       is_ai_interview: company.is_ai_interview === true,
+      interview_language: INTERVIEW_LANGUAGES.includes(
+        company.interview_language,
+      )
+        ? company.interview_language
+        : null,
     }))
     .filter((company) => company.name);
 }
@@ -181,7 +187,9 @@ function loadUserDataCache(userId) {
         (item) =>
           hasId(item) &&
           typeof item.name === "string" &&
-          STATUSES.includes(item.status),
+          STATUSES.includes(item.status) &&
+          (item.interview_language == null ||
+            INTERVIEW_LANGUAGES.includes(item.interview_language)),
       ),
       questions: cached.questions.filter(
         (item) =>
@@ -471,13 +479,16 @@ function CompanyCard({ company, onMove, onEdit, onDelete, onDragStart, onDragEnd
         <span className="rounds">
           {company.rounds} interview{company.rounds === 1 ? "" : "s"}
         </span>
+        {company.interview_language && (
+          <span className="interview-language">{company.interview_language}</span>
+        )}
       </button>
       <button
         className="company-action"
         type="button"
         onClick={() => onEdit(company)}
-        aria-label={`Edit interview count for ${company.name}`}
-        title="Edit interview count"
+        aria-label={`Edit interview details for ${company.name}`}
+        title="Edit interview details"
       >
         ✎
       </button>
@@ -518,6 +529,7 @@ function App() {
 
   const [companyName, setCompanyName] = useState("");
   const [interviewCount, setInterviewCount] = useState("1");
+  const [interviewLanguage, setInterviewLanguage] = useState("Java");
   const [isAiInterview, setIsAiInterview] = useState(false);
   const [message, setMessage] = useState("");
   const [draggedId, setDraggedId] = useState(null);
@@ -769,6 +781,7 @@ function App() {
       rounds,
       status: "running",
       is_ai_interview: isAiInterview,
+      interview_language: interviewLanguage,
     };
     let savedCompany = {
       ...newCompany,
@@ -789,6 +802,7 @@ function App() {
     setMessage(`${name} added as Company #${companies.length + 1} 🟡`);
     setCompanyName("");
     setInterviewCount("1");
+    setInterviewLanguage("Java");
     setIsAiInterview(false);
   }
 
@@ -825,18 +839,34 @@ function App() {
       return;
     }
 
+    const enteredLanguage = window.prompt(
+      `Interview language for ${company.name}? Enter Java, Python, or leave blank.`,
+      company.interview_language ?? "",
+    );
+    if (enteredLanguage === null) return;
+    const interview_language = enteredLanguage.trim() || null;
+    if (
+      interview_language !== null &&
+      !INTERVIEW_LANGUAGES.includes(interview_language)
+    ) {
+      setMessage("Interview language must be Java or Python, or blank.");
+      return;
+    }
+
     if (user) {
       const result = await runCloudMutation(() =>
-        updateCompany(company.id, { rounds }),
+        updateCompany(company.id, { rounds, interview_language }),
       );
       if (!result.ok) return;
     }
     setCompanies((current) =>
       current.map((item) =>
-        item.id === company.id ? { ...item, rounds } : item,
+        item.id === company.id
+          ? { ...item, rounds, interview_language }
+          : item,
       ),
     );
-    setMessage(`${company.name}: interview count updated to ${rounds}.`);
+    setMessage(`${company.name}: interview details updated.`);
   }
 
   async function deleteCompany(company) {
@@ -1198,6 +1228,19 @@ function App() {
               value={interviewCount}
               onChange={(event) => setInterviewCount(event.target.value)}
             />
+          </label>
+          <label>
+            Interview language
+            <select
+              value={interviewLanguage}
+              onChange={(event) => setInterviewLanguage(event.target.value)}
+            >
+              {INTERVIEW_LANGUAGES.map((language) => (
+                <option key={language} value={language}>
+                  {language}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="ai-interview-option">
             <input

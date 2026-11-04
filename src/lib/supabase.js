@@ -74,7 +74,7 @@ export async function fetchUserData() {
   const [companies, questions, skills, motivations] = await Promise.all([
     supabase
       .from(TABLES.companies)
-      .select("id,name,rounds,status,is_ai_interview")
+      .select("id,name,rounds,status,is_ai_interview,interview_language")
       .order("created_at"),
     supabase
       .from(TABLES.questions)
@@ -144,6 +144,11 @@ export async function importBrowserData(userId, data) {
       rounds: company.rounds,
       status: company.status,
       is_ai_interview: company.is_ai_interview === true,
+      interview_language:
+        company.interview_language === "Java" ||
+        company.interview_language === "Python"
+          ? company.interview_language
+          : null,
     }))
     .filter((company) => {
       const name = company.name.trim().toLocaleLowerCase();
