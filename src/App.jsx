@@ -2015,7 +2015,16 @@ function App() {
                 }
               }}
             >
-              <span aria-hidden="true">☰</span>
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              >
+                <path d="M3.5 5.5h13M3.5 10h13M3.5 14.5h13" />
+              </svg>
             </button>
             <span>Workspace <span aria-hidden="true">/</span> <strong>{activeView === "dashboard" ? "Overview" : activeView === "notes" ? "Notes" : activeCollection?.name ?? "Companies"}</strong></span>
           </div>
