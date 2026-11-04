@@ -25,6 +25,7 @@ const STORAGE_KEYS = {
   questions: "job-hunt-quest-questions-v1",
   motivations: "job-hunt-quest-motivations-v1",
   skills: "job-hunt-quest-skills-v1",
+  notes: "job-hunt-quest-notes-v1",
   target: "job-hunt-quest-target-v1",
 };
 const DEFAULT_COMPANY_TARGET = 100;
@@ -202,6 +203,20 @@ function loadSkills() {
       skill.name.trim() &&
       typeof skill.category === "string" &&
       SKILL_STATUSES.includes(skill.status),
+    [],
+  );
+}
+
+function loadNotes(storageKey = STORAGE_KEYS.notes) {
+  return loadFromStorage(
+    storageKey,
+    (note) =>
+      note &&
+      typeof note.id === "string" &&
+      typeof note.title === "string" &&
+      typeof note.content === "string" &&
+      typeof note.updatedAt === "string" &&
+      !Number.isNaN(Date.parse(note.updatedAt)),
     [],
   );
 }
@@ -916,7 +931,125 @@ function CompanyCard({ company, collection, onMove, onEdit, onDelete }) {
   );
 }
 
+function NotesView({ notes, onSave, onDelete }) {
+  const [title, setTitle] = useState("");
+  const [content, setContent] = useState("");
+  const [editingId, setEditingId] = useState(null);
+
+  function submitNote(event) {
+    event.preventDefault();
+    const trimmedTitle = title.trim();
+    const trimmedContent = content.trim();
+    if (!trimmedTitle || !trimmedContent) return;
+    onSave({ id: editingId, title: trimmedTitle, content: trimmedContent });
+    setTitle("");
+    setContent("");
+    setEditingId(null);
+  }
+
+  function editNote(note) {
+    setTitle(note.title);
+    setContent(note.content);
+    setEditingId(note.id);
+  }
+
+  function cancelEdit() {
+    setTitle("");
+    setContent("");
+    setEditingId(null);
+  }
+
+  return (
+    <section className="notes-page" aria-labelledby="notes-title">
+      <div className="notes-heading">
+        <div>
+          <div className="eyebrow">YOUR WORKSPACE</div>
+          <h1 id="notes-title">Notes</h1>
+          <p>Keep important reminders and ideas close at hand.</p>
+        </div>
+      </div>
+      <form className="notes-form" onSubmit={submitNote}>
+        <h2>{editingId ? "Edit note" : "Add a note"}</h2>
+        <label>
+          Title
+          <input
+            type="text"
+            maxLength="120"
+            required
+            value={title}
+            onChange={(event) => setTitle(event.target.value)}
+            placeholder="e.g. Questions for my next interview"
+          />
+        </label>
+        <label>
+          Note
+          <textarea
+            required
+            rows="5"
+            value={content}
+            onChange={(event) => setContent(event.target.value)}
+            placeholder="Write down a reminder, idea, or anything you want to keep."
+          />
+        </label>
+        <div className="notes-form-actions">
+          <button className="primary-action" type="submit">
+            {editingId ? "Save changes" : "Save note"}
+          </button>
+          {editingId && (
+            <button className="secondary-action" type="button" onClick={cancelEdit}>
+              Cancel
+            </button>
+          )}
+        </div>
+      </form>
+      <div className="notes-list" aria-live="polite">
+        {notes.length ? (
+          [...notes]
+            .sort((left, right) => Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+            .map((note) => (
+              <article className="note-card" key={note.id}>
+                <div className="note-card-heading">
+                  <div>
+                    <h2>{note.title}</h2>
+                    <time dateTime={note.updatedAt}>
+                      Updated {new Intl.DateTimeFormat(undefined, { dateStyle: "medium" }).format(new Date(note.updatedAt))}
+                    </time>
+                  </div>
+                  <div className="note-card-actions">
+                    <button type="button" onClick={() => editNote(note)}>Edit</button>
+                    <button type="button" onClick={() => onDelete(note.id)} aria-label={`Delete ${note.title}`}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+                <p>{note.content}</p>
+              </article>
+            ))
+        ) : (
+          <div className="notes-empty">
+            <strong>No notes yet</strong>
+            <p>Add your first note to keep an interview reminder or idea handy.</p>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
 function App() {
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [isMobileViewport, setIsMobileViewport] = useState(
+    () =>
+      typeof window !== "undefined" &&
+      window.matchMedia("(max-width: 600px)").matches,
+  );
+  useEffect(() => {
+    const updateViewport = () =>
+      setIsMobileViewport(window.matchMedia("(max-width: 600px)").matches);
+    window.addEventListener("resize", updateViewport);
+    return () => window.removeEventListener("resize", updateViewport);
+  }, []);
   const [companies, setCompanies] = usePersistentState(
     STORAGE_KEYS.companies,
     () => (supabase ? [] : loadCompanies()),
@@ -943,7 +1076,6 @@ function App() {
     () => (supabase ? [] : loadSkills()),
     !supabase,
   );
-
   const [companyName, setCompanyName] = useState("");
   const [interviewCount, setInterviewCount] = useState("1");
   const [interviewLanguage, setInterviewLanguage] = useState("Java");
@@ -991,6 +1123,26 @@ function App() {
   }
 
   const user = session?.user ?? null;
+  const notesStorageKey = user
+    ? `${STORAGE_KEYS.notes}:${user.id}`
+    : STORAGE_KEYS.notes;
+  const notesStorageKeyRef = useRef(notesStorageKey);
+  const [notes, setNotes] = useState(loadNotes);
+
+  useEffect(() => {
+    if (notesStorageKeyRef.current === notesStorageKey) return;
+    notesStorageKeyRef.current = notesStorageKey;
+    setNotes(loadNotes(notesStorageKey));
+  }, [notesStorageKey]);
+
+  useEffect(() => {
+    if (notesStorageKeyRef.current !== notesStorageKey) return;
+    try {
+      localStorage.setItem(notesStorageKey, JSON.stringify(notes));
+    } catch (error) {
+      console.warn("Could not save notes:", error);
+    }
+  }, [notes, notesStorageKey]);
 
   useEffect(() => {
     try {
@@ -1632,6 +1784,33 @@ function App() {
     );
   }
 
+  function saveNote(note) {
+    const now = new Date().toISOString();
+    setNotes((current) =>
+      note.id
+        ? current.map((item) =>
+            item.id === note.id
+              ? { ...item, title: note.title, content: note.content, updatedAt: now }
+              : item,
+          )
+        : [
+            {
+              ...note,
+              id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+              createdAt: now,
+              updatedAt: now,
+            },
+            ...current,
+          ],
+    );
+  }
+
+  function deleteNote(noteId) {
+    const note = notes.find((item) => item.id === noteId);
+    if (!note || !window.confirm(`Delete "${note.title}"?`)) return;
+    setNotes((current) => current.filter((item) => item.id !== noteId));
+  }
+
   async function signOut() {
     setSigningOut(true);
     try {
@@ -1643,8 +1822,14 @@ function App() {
   }
 
   function navigateToSection(section) {
+    setMobileSidebarOpen(false);
     if (section === "dashboard") {
       setActiveView("dashboard");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
+    if (section === "notes") {
+      setActiveView("notes");
       window.scrollTo({ top: 0, behavior: "smooth" });
       return;
     }
@@ -1722,8 +1907,24 @@ function App() {
   }
 
   return (
-    <div className="workspace-shell">
+    <div className={`workspace-shell${sidebarCollapsed ? " sidebar-collapsed" : ""}${mobileSidebarOpen ? " mobile-sidebar-open" : ""}`}>
+      {mobileSidebarOpen && (
+        <button
+          className="sidebar-backdrop"
+          type="button"
+          aria-label="Close navigation menu"
+          onClick={() => setMobileSidebarOpen(false)}
+        />
+      )}
       <aside className="workspace-sidebar">
+        <button
+          className="sidebar-close"
+          type="button"
+          aria-label="Close navigation menu"
+          onClick={() => setMobileSidebarOpen(false)}
+        >
+          Close menu
+        </button>
         <div className="workspace-brand">
           <span className="workspace-brand-mark" aria-hidden="true">J</span>
           <span className="workspace-brand-copy">
@@ -1757,6 +1958,15 @@ function App() {
           <button type="button" aria-label="Skills" onClick={() => navigateToSection("skills")}>
             <span aria-hidden="true">✳</span><span className="workspace-nav-text">Skills</span>
           </button>
+          <button
+            type="button"
+            className={activeView === "notes" ? "active" : ""}
+            aria-label="Notes"
+            aria-current={activeView === "notes" ? "page" : undefined}
+            onClick={() => navigateToSection("notes")}
+          >
+            <span aria-hidden="true">✎</span><span className="workspace-nav-text">Notes</span>
+          </button>
         </nav>
         <div className="workspace-account">
           <span className="workspace-avatar" aria-hidden="true">
@@ -1781,7 +1991,34 @@ function App() {
 
       <main className="workspace-main">
         <div className="workspace-topbar">
-          <div>Workspace <span aria-hidden="true">/</span> <strong>{activeView === "dashboard" ? "Overview" : activeCollection?.name ?? "Companies"}</strong></div>
+          <div className="workspace-breadcrumb">
+            <button
+              className="sidebar-toggle"
+              type="button"
+              aria-label={
+                isMobileViewport
+                  ? mobileSidebarOpen
+                    ? "Close navigation menu"
+                    : "Open navigation menu"
+                  : sidebarCollapsed
+                    ? "Expand sidebar"
+                    : "Collapse sidebar"
+              }
+              aria-expanded={
+                isMobileViewport ? mobileSidebarOpen : !sidebarCollapsed
+              }
+              onClick={() => {
+                if (window.matchMedia("(max-width: 600px)").matches) {
+                  setMobileSidebarOpen((open) => !open);
+                } else {
+                  setSidebarCollapsed((collapsed) => !collapsed);
+                }
+              }}
+            >
+              <span aria-hidden="true">☰</span>
+            </button>
+            <span>Workspace <span aria-hidden="true">/</span> <strong>{activeView === "dashboard" ? "Overview" : activeView === "notes" ? "Notes" : activeCollection?.name ?? "Companies"}</strong></span>
+          </div>
           <div className="workspace-topbar-actions">
             {saving || (cloudLoading && hasUserCache) ? (
               <span className="workspace-sync"><i />Syncing changes</span>
@@ -2218,6 +2455,9 @@ function App() {
 
         </>
       )}
+      {activeView === "notes" && (
+        <NotesView notes={notes} onSave={saveNote} onDelete={deleteNote} />
+      )}
       </main>
 
       <nav className="mobile-workspace-nav" aria-label="Mobile navigation">
@@ -2240,6 +2480,14 @@ function App() {
         </button>
         <button type="button" onClick={() => navigateToSection("skills")}>
           <span aria-hidden="true">✳</span>Skills
+        </button>
+        <button
+          type="button"
+          className={activeView === "notes" ? "active" : ""}
+          aria-current={activeView === "notes" ? "page" : undefined}
+          onClick={() => navigateToSection("notes")}
+        >
+          <span aria-hidden="true">✎</span>Notes
         </button>
       </nav>
 
