@@ -3,18 +3,23 @@ import {
   createCompany,
   createCollection,
   createMotivation,
+  createNote as createNoteRemote,
   createQuestion,
   createSkill,
   deleteCompany as deleteCompanyRemote,
   deleteCollection as deleteCollectionRemote,
   deleteMotivation as deleteMotivationRemote,
+  deleteNote as deleteNoteRemote,
   deleteQuestion as deleteQuestionRemote,
   deleteSkill as deleteSkillRemote,
   fetchUserData,
+  fetchNotes,
+  importBrowserNotes,
   importBrowserData,
   supabase,
   updateCompany,
   updateMotivation,
+  updateNote as updateNoteRemote,
   updateQuestion,
   updateSkill,
 } from "./lib/supabase.js";
@@ -278,6 +283,16 @@ function loadUserDataCache(userId) {
       motivations: cached.motivations.filter(
         (item) => hasId(item) && typeof item.line === "string",
       ),
+      notes: Array.isArray(cached.notes)
+        ? cached.notes.filter(
+            (item) =>
+              hasId(item) &&
+              typeof item.title === "string" &&
+              typeof item.content === "string" &&
+              typeof item.updatedAt === "string" &&
+              !Number.isNaN(Date.parse(item.updatedAt)),
+          )
+        : [],
     };
   } catch (error) {
     console.warn("Could not restore cached account data:", error);
@@ -931,17 +946,22 @@ function CompanyCard({ company, collection, onMove, onEdit, onDelete }) {
   );
 }
 
-function NotesView({ notes, onSave, onDelete }) {
+function NotesView({ notes, onSave, onDelete, saving }) {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [editingId, setEditingId] = useState(null);
 
-  function submitNote(event) {
+  async function submitNote(event) {
     event.preventDefault();
     const trimmedTitle = title.trim();
     const trimmedContent = content.trim();
     if (!trimmedTitle || !trimmedContent) return;
-    onSave({ id: editingId, title: trimmedTitle, content: trimmedContent });
+    const saved = await onSave({
+      id: editingId,
+      title: trimmedTitle,
+      content: trimmedContent,
+    });
+    if (!saved) return;
     setTitle("");
     setContent("");
     setEditingId(null);
@@ -992,8 +1012,8 @@ function NotesView({ notes, onSave, onDelete }) {
           />
         </label>
         <div className="notes-form-actions">
-          <button className="primary-action" type="submit">
-            {editingId ? "Save changes" : "Save note"}
+          <button className="primary-action" type="submit" disabled={saving}>
+            {saving ? "Saving..." : editingId ? "Save changes" : "Save note"}
           </button>
           {editingId && (
             <button className="secondary-action" type="button" onClick={cancelEdit}>
@@ -1130,12 +1150,14 @@ function App() {
   const [notes, setNotes] = useState(loadNotes);
 
   useEffect(() => {
+    if (supabase) return;
     if (notesStorageKeyRef.current === notesStorageKey) return;
     notesStorageKeyRef.current = notesStorageKey;
     setNotes(loadNotes(notesStorageKey));
   }, [notesStorageKey]);
 
   useEffect(() => {
+    if (supabase) return;
     if (notesStorageKeyRef.current !== notesStorageKey) return;
     try {
       localStorage.setItem(notesStorageKey, JSON.stringify(notes));
@@ -1219,6 +1241,7 @@ function App() {
         setQuestions([]);
         setSkills([]);
         setMotivations([]);
+        setNotes([]);
       }
     });
 
@@ -1260,6 +1283,9 @@ function App() {
         setQuestions(cachedData.questions);
         setSkills(cachedData.skills);
         setMotivations(cachedData.motivations);
+        setNotes(cachedData.notes);
+      } else {
+        setNotes([]);
       }
 
       const backup = legacyData.current;
@@ -1311,6 +1337,34 @@ function App() {
       setSkills(data.skills);
       setMotivations(data.motivations);
       saveUserDataCache(user.id, data);
+
+      const notesImportKey = `job-hunt-quest-notes-import-v1:${user.id}`;
+      let notesImported = false;
+      try {
+        notesImported = localStorage.getItem(notesImportKey) === "1";
+      } catch (error) {
+        console.warn("Could not check browser notes sync status:", error);
+      }
+      if (!notesImported) {
+        const browserNotes = [
+          ...loadNotes(STORAGE_KEYS.notes),
+          ...loadNotes(`${STORAGE_KEYS.notes}:${user.id}`),
+        ];
+        const uniqueNotes = [...new Map(
+          browserNotes.map((note) => [note.id, note]),
+        ).values()];
+        await importBrowserNotes(user.id, uniqueNotes);
+        try {
+          localStorage.setItem(notesImportKey, "1");
+        } catch (error) {
+          console.warn("Could not save browser notes sync status:", error);
+        }
+      }
+      if (!active) return;
+      const savedNotes = await fetchNotes();
+      if (!active) return;
+      setNotes(savedNotes);
+      saveUserDataCache(user.id, { ...data, notes: savedNotes });
       setHasUserCache(true);
     }
 
@@ -1340,8 +1394,9 @@ function App() {
       questions,
       skills,
       motivations,
+      notes,
     });
-  }, [user?.id, cloudLoading, companies, collections, questions, skills, motivations]);
+  }, [user?.id, cloudLoading, companies, collections, questions, skills, motivations, notes]);
 
   async function runCloudMutation(operation) {
     setSaving(true);
@@ -1784,30 +1839,39 @@ function App() {
     );
   }
 
-  function saveNote(note) {
+  async function saveNote(note) {
     const now = new Date().toISOString();
+    const existingNote = notes.find((item) => item.id === note.id);
+    let savedNote = {
+      ...note,
+      id: note.id ?? globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
+      createdAt: existingNote?.createdAt ?? now,
+      updatedAt: now,
+    };
+    if (user) {
+      const result = await runCloudMutation(() =>
+        note.id
+          ? updateNoteRemote(note.id, note)
+          : createNoteRemote(user.id, note),
+      );
+      if (!result.ok) return false;
+      savedNote = result.value;
+    }
     setNotes((current) =>
       note.id
-        ? current.map((item) =>
-            item.id === note.id
-              ? { ...item, title: note.title, content: note.content, updatedAt: now }
-              : item,
-          )
-        : [
-            {
-              ...note,
-              id: globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random()}`,
-              createdAt: now,
-              updatedAt: now,
-            },
-            ...current,
-          ],
+        ? current.map((item) => (item.id === note.id ? savedNote : item))
+        : [savedNote, ...current],
     );
+    return true;
   }
 
-  function deleteNote(noteId) {
+  async function deleteNote(noteId) {
     const note = notes.find((item) => item.id === noteId);
     if (!note || !window.confirm(`Delete "${note.title}"?`)) return;
+    if (user) {
+      const result = await runCloudMutation(() => deleteNoteRemote(noteId));
+      if (!result.ok) return;
+    }
     setNotes((current) => current.filter((item) => item.id !== noteId));
   }
 
@@ -2465,7 +2529,12 @@ function App() {
         </>
       )}
       {activeView === "notes" && (
-        <NotesView notes={notes} onSave={saveNote} onDelete={deleteNote} />
+        <NotesView
+          notes={notes}
+          onSave={saveNote}
+          onDelete={deleteNote}
+          saving={saving}
+        />
       )}
       </main>
 

@@ -30,6 +30,8 @@ To add **interview collections** to an existing Supabase project, run [`supabase
 
 To add the optional **scheduled interview date and time** to an existing Supabase project, run [`supabase/add_scheduled_interview_at.sql`](./supabase/add_scheduled_interview_at.sql) in the SQL Editor. New projects get this column when you run [`supabase/schema.sql`](./supabase/schema.sql).
 
+To enable cloud-synced **notes** for an existing Supabase project, run [`supabase/add_notes.sql`](./supabase/add_notes.sql) in the SQL Editor. New projects get the notes table when you run [`supabase/schema.sql`](./supabase/schema.sql). Existing browser notes are imported into the signed-in account on its next load.
+
 The frontend key is public by design; Row Level Security policies in the schema restrict every record to its owning authenticated user. Never add a Supabase service-role key to the frontend or GitHub Pages build.
 
 The app is configured for GitHub Pages at `/job-hunt-quest-react/`. Push to `main` to build and deploy through GitHub Actions.

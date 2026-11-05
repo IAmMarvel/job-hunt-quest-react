@@ -47,6 +47,7 @@ const TABLES = {
   questions: "interview_questions",
   skills: "skills",
   motivations: "motivation_lines",
+  notes: "notes",
 };
 
 function unwrap({ data, error }) {
@@ -137,6 +138,65 @@ export const createMotivation = (userId, line) =>
 export const updateMotivation = (id, line) =>
   updateRow(TABLES.motivations, id, { line });
 export const deleteMotivation = (id) => deleteRow(TABLES.motivations, id);
+
+export async function fetchNotes() {
+  const rows = unwrap(
+    await supabase
+      .from(TABLES.notes)
+      .select("id,title,content,created_at,updated_at")
+      .order("updated_at", { ascending: false }),
+  );
+  return rows.map((note) => ({
+    id: note.id,
+    title: note.title,
+    content: note.content,
+    createdAt: note.created_at,
+    updatedAt: note.updated_at,
+  }));
+}
+
+export const createNote = (userId, note) =>
+  insertRow(TABLES.notes, {
+    user_id: userId,
+    title: note.title,
+    content: note.content,
+  }).then((note) => ({
+    id: note.id,
+    title: note.title,
+    content: note.content,
+    createdAt: note.created_at,
+    updatedAt: note.updated_at,
+  }));
+export const updateNote = (id, changes) =>
+  updateRow(TABLES.notes, id, {
+    title: changes.title,
+    content: changes.content,
+    updated_at: new Date().toISOString(),
+  }).then((note) => ({
+    id: note.id,
+    title: note.title,
+    content: note.content,
+    createdAt: note.created_at,
+    updatedAt: note.updated_at,
+  }));
+export const deleteNote = (id) => deleteRow(TABLES.notes, id);
+
+export async function importBrowserNotes(userId, notes) {
+  if (!notes.length) return;
+  unwrap(
+    await supabase.from(TABLES.notes).upsert(
+      notes.map((note) => ({
+        user_id: userId,
+        legacy_id: note.id,
+        title: note.title,
+        content: note.content,
+        created_at: note.createdAt,
+        updated_at: note.updatedAt,
+      })),
+      { onConflict: "user_id,legacy_id" },
+    ),
+  );
+}
 
 export async function importBrowserData(userId, data, collectionId) {
   const existingCompanies = unwrap(
