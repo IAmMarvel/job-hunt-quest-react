@@ -596,6 +596,7 @@ function DashboardView({
   onDeleteCollection,
   onAddCompany,
   onViewCompanies,
+  onViewScheduledCompanies,
   onSaveCompanyTarget,
 }) {
   const statusCounts = Object.fromEntries(
@@ -604,19 +605,18 @@ function DashboardView({
       companies.filter((company) => company.status === status).length,
     ]),
   );
-  const upcomingCompanies = [...companies]
-    .filter(
-      (company) =>
-        company.scheduled_at &&
-        new Date(company.scheduled_at).getTime() >= Date.now(),
-    )
+  const scheduledCompanies = companies.filter(
+    (company) => company.status === "running" && company.scheduled_at,
+  );
+  const upcomingCompanies = [...scheduledCompanies]
+    .filter((company) => new Date(company.scheduled_at).getTime() >= Date.now())
     .sort(
       (left, right) =>
         new Date(left.scheduled_at).getTime() -
         new Date(right.scheduled_at).getTime(),
     )
     .slice(0, 3);
-  const scheduledCount = companies.filter((company) => company.scheduled_at).length;
+  const scheduledCount = scheduledCompanies.length;
   const [newCollectionName, setNewCollectionName] = useState("");
   const [editingTarget, setEditingTarget] = useState(false);
   const [targetValue, setTargetValue] = useState(String(companyTarget));
@@ -744,7 +744,7 @@ function DashboardView({
                 <h3 id="upcoming-title">Coming up next</h3>
                 <p>Your next scheduled interview</p>
               </div>
-              <button type="button" className="text-action" onClick={onViewCompanies}>
+              <button type="button" className="text-action" onClick={onViewScheduledCompanies}>
                 View all <span aria-hidden="true">→</span>
               </button>
             </div>
@@ -1469,7 +1469,12 @@ function App() {
       .filter(
         (company) =>
           (companyStatusFilter === "all" ||
-            company.status === companyStatusFilter) &&
+            (companyStatusFilter === "scheduled" &&
+              company.status === "running" &&
+              company.scheduled_at) ||
+            (companyStatusFilter !== "scheduled" &&
+              companyStatusFilter !== "all" &&
+              company.status === companyStatusFilter)) &&
           (!search || company.name.toLowerCase().includes(search)),
       )
       .sort((left, right) => left.name.localeCompare(right.name));
@@ -2183,6 +2188,16 @@ function App() {
             openAddCompany();
           }}
           onViewCompanies={() => {
+            setActiveCollectionId(null);
+            setCompanySearch("");
+            setCompanyStatusFilter("all");
+            setActiveView("board");
+            window.scrollTo({ top: 0, behavior: "smooth" });
+          }}
+          onViewScheduledCompanies={() => {
+            setActiveCollectionId(null);
+            setCompanySearch("");
+            setCompanyStatusFilter("scheduled");
             setActiveView("board");
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
@@ -2219,7 +2234,7 @@ function App() {
                 {visibleCompanies.length} of {collectionCompanies.length} companies
               </span>
             </div>
-            <div className="company-filters" aria-label="Filter companies by status">
+            <div className="company-filters" aria-label="Filter companies">
               <button
                 type="button"
                 className={companyStatusFilter === "all" ? "active" : ""}
@@ -2227,6 +2242,20 @@ function App() {
                 onClick={() => setCompanyStatusFilter("all")}
               >
                 All <span>{collectionCompanies.length}</span>
+              </button>
+              <button
+                type="button"
+                className={companyStatusFilter === "scheduled" ? "active" : ""}
+                aria-pressed={companyStatusFilter === "scheduled"}
+                onClick={() => setCompanyStatusFilter("scheduled")}
+              >
+                Scheduled interviews{" "}
+                <span>
+                  {collectionCompanies.filter(
+                    (company) =>
+                      company.status === "running" && company.scheduled_at,
+                  ).length}
+                </span>
               </button>
               {STATUSES.map((status) => (
                 <button
