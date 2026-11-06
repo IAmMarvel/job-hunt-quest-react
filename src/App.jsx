@@ -1110,6 +1110,7 @@ function App() {
   const [companySearch, setCompanySearch] = useState("");
   const [companyStatusFilter, setCompanyStatusFilter] = useState("all");
   const [activeCollectionId, setActiveCollectionId] = useState(null);
+  const [showAllCollections, setShowAllCollections] = useState(false);
   const [selectedCollectionIds, setSelectedCollectionIds] = useState([]);
   const [message, setMessage] = useState("");
 
@@ -1178,13 +1179,15 @@ function App() {
     if (!collections.length) {
       setActiveCollectionId(null);
       setSelectedCollectionIds([]);
+      setShowAllCollections(false);
       return;
     }
+    if (showAllCollections) return;
     if (!collections.some((collection) => collection.id === activeCollectionId)) {
       setActiveCollectionId(collections[0].id);
       setSelectedCollectionIds([collections[0].id]);
     }
-  }, [collections, activeCollectionId]);
+  }, [collections, activeCollectionId, showAllCollections]);
 
   useEffect(() => {
     const fallbackCollection =
@@ -1455,12 +1458,14 @@ function App() {
   );
   const collectionCompanies = useMemo(
     () =>
-      activeCollection
+      showAllCollections
+        ? companies
+        : activeCollection
         ? companies.filter(
             (company) => company.collection_id === activeCollection.id,
           )
         : [],
-    [companies, activeCollection],
+    [companies, activeCollection, showAllCollections],
   );
 
   const visibleCompanies = useMemo(() => {
@@ -2176,6 +2181,7 @@ function App() {
           companyTarget={companyTarget}
           collections={collections}
           onOpenCollection={(collection) => {
+            setShowAllCollections(false);
             setActiveCollectionId(collection.id);
             setSelectedCollectionIds([collection.id]);
             setActiveView("board");
@@ -2188,6 +2194,7 @@ function App() {
             openAddCompany();
           }}
           onViewCompanies={() => {
+            setShowAllCollections(false);
             setActiveCollectionId(null);
             setCompanySearch("");
             setCompanyStatusFilter("all");
@@ -2195,6 +2202,7 @@ function App() {
             window.scrollTo({ top: 0, behavior: "smooth" });
           }}
           onViewScheduledCompanies={() => {
+            setShowAllCollections(true);
             setActiveCollectionId(null);
             setCompanySearch("");
             setCompanyStatusFilter("scheduled");
@@ -2210,7 +2218,11 @@ function App() {
         <section className="pipeline-page" id="companies" aria-label="Company pipeline">
           <div className="pipeline-heading">
             <div>
-              <div className="eyebrow">{activeCollection?.name ?? "YOUR COMPANIES"}</div>
+              <div className="eyebrow">
+                {showAllCollections
+                  ? "ALL COLLECTIONS"
+                  : activeCollection?.name ?? "YOUR COMPANIES"}
+              </div>
               <h1>Company pipeline</h1>
               <p>Keep every application and interview detail in one place.</p>
             </div>
