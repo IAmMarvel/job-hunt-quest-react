@@ -2591,6 +2591,7 @@ textarea:focus {
 }
 
 .company-status.running { color: #805c14; background: #fff3d4; }
+.company-status.in_progress { color: #34658a; background: #e6f2fa; }
 .company-status.selected { color: #34704a; background: #e7f3e9; }
 .company-status.pending { color: #70559a; background: #f0eafd; }
 .company-status.rejected { color: #6b7470; background: #edf0ee; }

@@ -14,7 +14,7 @@ create table if not exists public.companies (
   name text not null check (char_length(name) between 1 and 80),
   rounds integer not null check (rounds between 1 and 20),
   interview_rounds jsonb not null default '[]'::jsonb,
-  status text not null check (status in ('selected', 'running', 'pending', 'rejected')),
+  status text not null check (status in ('selected', 'running', 'in_progress', 'pending', 'rejected')),
   is_ai_interview boolean not null default false,
   interview_language text check (interview_language in ('Java', 'Python')),
   scheduled_at timestamptz,

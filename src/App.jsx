@@ -37,7 +37,7 @@ const DEFAULT_COMPANY_TARGET = 100;
 const BROWSER_IMPORT_KEY = "job-hunt-quest-browser-import-v1";
 const USER_CACHE_KEY = "job-hunt-quest-user-cache-v1";
 
-const STATUSES = ["selected", "running", "pending", "rejected"];
+const STATUSES = ["selected", "running", "in_progress", "pending", "rejected"];
 const ROUND_STATUSES = [
   "planned",
   "scheduled",
@@ -61,7 +61,8 @@ const DEFAULT_COLLECTION = {
   name: "Bangalore Interviews",
 };
 const NEXT_STATUS = {
-  running: "selected",
+  running: "in_progress",
+  in_progress: "selected",
   selected: "pending",
   pending: "rejected",
   rejected: "running",
@@ -69,6 +70,7 @@ const NEXT_STATUS = {
 const STATUS_LABELS = {
   selected: "Selected",
   running: "Scheduled",
+  in_progress: "Going On",
   pending: "Pending",
   rejected: "Not Selected",
 };
@@ -163,6 +165,10 @@ function normalizeCompany(company) {
       }));
   const interview_rounds = sourceRounds.map((round, index) => ({
     number: index + 1,
+    name:
+      typeof round.name === "string" && round.name.trim()
+        ? round.name.trim()
+        : `Round ${index + 1}`,
     status: ROUND_STATUSES.includes(round.status) ? round.status : "planned",
     scheduled_at:
       typeof round.scheduled_at === "string" &&
@@ -830,7 +836,7 @@ function DashboardView({
                       <div className="upcoming-details">
                         <strong>{company.name}</strong>
                         <span>
-                          Round {round.number}
+                          {round.name}
                           {collection ? ` · ${collection.name}` : ""}
                         </span>
                       </div>
@@ -967,7 +973,7 @@ function CompanyCard({
   const roundSummary = (company.interview_rounds ?? [])
     .map(
       (round) =>
-        `R${round.number} ${ROUND_STATUS_LABELS[round.status].toLowerCase()}`,
+        `${round.name} ${ROUND_STATUS_LABELS[round.status].toLowerCase()}`,
     )
     .join(" · ");
   return (
@@ -1005,7 +1011,7 @@ function CompanyCard({
                   dateTime={round.scheduled_at}
                   key={round.number}
                 >
-                  ◷ R{round.number}: {formatScheduledAt(round.scheduled_at)}
+                  ◷ {round.name}: {formatScheduledAt(round.scheduled_at)}
                 </time>
               ))}
           </span>
@@ -1081,6 +1087,7 @@ function InterviewRoundsDialog({ company, onClose, onSave, saving }) {
       ...current,
       {
         number: current.length + 1,
+        name: `Round ${current.length + 1}`,
         status: "planned",
         scheduled_at: null,
         date: "",
@@ -1106,8 +1113,14 @@ function InterviewRoundsDialog({ company, onClose, onSave, saving }) {
         setError(`Add a date and time to schedule Round ${index + 1}.`);
         return;
       }
+      const name = round.name.trim();
+      if (!name) {
+        setError(`Enter a name for Round ${index + 1}.`);
+        return;
+      }
       savedRounds.push({
         number: index + 1,
+        name,
         status: round.status,
         scheduled_at,
       });
@@ -1150,7 +1163,7 @@ function InterviewRoundsDialog({ company, onClose, onSave, saving }) {
           {rounds.map((round, index) => (
             <section className="interview-round-card" key={index}>
               <div className="interview-round-heading">
-                <h3>Round {index + 1}</h3>
+                <h3>{round.name || `Round ${index + 1}`}</h3>
                 {rounds.length > 1 && (
                   <button
                     className="text-action"
@@ -1170,6 +1183,18 @@ function InterviewRoundsDialog({ company, onClose, onSave, saving }) {
                   </button>
                 )}
               </div>
+              <label className="dialog-field interview-round-name">
+                Round name
+                <input
+                  type="text"
+                  maxLength="80"
+                  required
+                  value={round.name}
+                  onChange={(event) =>
+                    updateRound(index, { name: event.target.value })
+                  }
+                />
+              </label>
               <label className="dialog-field">
                 Round status
                 <select
@@ -1905,6 +1930,7 @@ function App() {
       interview_rounds: [
         {
           number: 1,
+          name: "Round 1",
           status: scheduled_at ? "scheduled" : "planned",
           scheduled_at,
         },
@@ -2994,7 +3020,7 @@ function App() {
               </label>
               <p className="rounds-form-hint dialog-field-full">
                 {editingCompany
-                  ? `${editingCompany.rounds} interview round${editingCompany.rounds === 1 ? "" : "s"}. Use Manage rounds on the company card to update their status and schedule.`
+                  ? `${editingCompany.rounds} interview round${editingCompany.rounds === 1 ? "" : "s"}. Use Manage rounds on the company card to update their name, status, and schedule.`
                   : "Round 1 is created automatically. You can add and schedule more rounds from the company card."}
               </p>
               {!editingCompany && (
