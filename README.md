@@ -32,7 +32,7 @@ To add the optional **scheduled interview date and time** to an existing Supabas
 
 To enable **round-by-round interview tracking** for an existing Supabase project, run [`supabase/add_interview_rounds.sql`](./supabase/add_interview_rounds.sql) in the SQL Editor. It creates round records from existing interview counts and carries over the existing schedule for Round 1. Round names can be customized from the company’s **Rounds** editor. New projects get this column when you run [`supabase/schema.sql`](./supabase/schema.sql).
 
-To remove the retired **Going On** company status from an existing Supabase project, run [`supabase/remove_company_going_on_status.sql`](./supabase/remove_company_going_on_status.sql) in the SQL Editor. Existing companies with this status are moved to **Scheduled**, and rounds for **Not Selected** companies are marked **Not passed**. New projects no longer include this status in [`supabase/schema.sql`](./supabase/schema.sql).
+To remove the retired **Going On** company status from an existing Supabase project, run [`supabase/remove_company_going_on_status.sql`](./supabase/remove_company_going_on_status.sql) in the SQL Editor. Existing companies with this status are moved to **Scheduled**. Company outcomes are independent of round outcomes; each round keeps its own result. New projects no longer include this status in [`supabase/schema.sql`](./supabase/schema.sql).
 
 To enable cloud-synced **notes** for an existing Supabase project, run [`supabase/add_notes.sql`](./supabase/add_notes.sql) in the SQL Editor. New projects get the notes table when you run [`supabase/schema.sql`](./supabase/schema.sql). Existing browser notes are imported into the signed-in account on its next load.
 

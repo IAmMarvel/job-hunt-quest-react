@@ -191,10 +191,6 @@ function hasScheduledRound(company) {
   );
 }
 
-function markRoundsNotPassed(rounds) {
-  return (rounds ?? []).map((round) => ({ ...round, status: "not_passed" }));
-}
-
 function loadCompanies(fallback = INITIAL_COMPANIES) {
   return loadFromStorage(
     STORAGE_KEYS.companies,
@@ -1126,7 +1122,7 @@ function InterviewRoundsDialog({ company, onClose, onSave, saving }) {
       {
         number: current.length + 1,
         name: `Round ${current.length + 1}`,
-        status: company.status === "rejected" ? "not_passed" : "planned",
+        status: "planned",
         scheduled_at: null,
         date: "",
         time: "",
@@ -1159,7 +1155,7 @@ function InterviewRoundsDialog({ company, onClose, onSave, saving }) {
       savedRounds.push({
         number: index + 1,
         name,
-        status: company.status === "rejected" ? "not_passed" : round.status,
+        status: round.status,
         scheduled_at,
       });
     }
@@ -1187,12 +1183,6 @@ function InterviewRoundsDialog({ company, onClose, onSave, saving }) {
           <div>
             <h2 id="interview-rounds-title">Interview rounds</h2>
             <p>Track each round’s outcome and schedule separately.</p>
-            {company.status === "rejected" && (
-              <p className="rounds-form-hint">
-                This company is Not Selected, so all rounds are marked Not passed.
-                Change its application status to edit round outcomes.
-              </p>
-            )}
           </div>
           <button
             type="button"
@@ -1243,7 +1233,6 @@ function InterviewRoundsDialog({ company, onClose, onSave, saving }) {
                 Round status
                 <select
                   value={round.status}
-                  disabled={company.status === "rejected"}
                   onChange={(event) =>
                     updateRound(index, { status: event.target.value })
                   }
@@ -1930,12 +1919,6 @@ function App() {
         interview_language: interviewLanguage || null,
         is_ai_interview: isAiInterview,
       };
-      if (companyStatus === "rejected") {
-        updates.interview_rounds = markRoundsNotPassed(
-          editingCompany.interview_rounds,
-        );
-        updates.scheduled_at = null;
-      }
       if (user) {
         const result = await runCloudMutation(() =>
           updateCompany(editingCompany.id, updates),
@@ -1982,19 +1965,14 @@ function App() {
         {
           number: 1,
           name: "Round 1",
-          status:
-            companyStatus === "rejected"
-              ? "not_passed"
-              : scheduled_at
-                ? "scheduled"
-                : "planned",
-          scheduled_at: companyStatus === "rejected" ? null : scheduled_at,
+          status: scheduled_at ? "scheduled" : "planned",
+          scheduled_at,
         },
       ],
       status: companyStatus,
       is_ai_interview: isAiInterview,
       interview_language: interviewLanguage || null,
-      scheduled_at: companyStatus === "rejected" ? null : scheduled_at,
+      scheduled_at,
     };
     let savedCompanies = targetCollections.map((collection, index) => ({
       ...newCompany,
@@ -2056,22 +2034,15 @@ function App() {
 
     const status =
       targetStatus ?? NEXT_STATUS[company.status];
-    const updates = {
-      status,
-      ...(status === "rejected" && {
-        interview_rounds: markRoundsNotPassed(company.interview_rounds),
-        scheduled_at: null,
-      }),
-    };
     if (user) {
       const result = await runCloudMutation(() =>
-        updateCompany(id, updates),
+        updateCompany(id, { status }),
       );
       if (!result.ok) return;
     }
     setCompanies((current) =>
       current.map((item) =>
-        item.id === id ? { ...item, ...updates } : item,
+        item.id === id ? { ...item, status } : item,
       ),
     );
     setMessage(`${company.name} moved to ${STATUS_LABELS[status]}.`);
@@ -3090,11 +3061,6 @@ function App() {
                   ))}
                 </select>
               </label>
-              {companyStatus === "rejected" && (
-                <p className="rounds-form-hint dialog-field-full">
-                  Marking a company Not Selected marks all its interview rounds Not passed.
-                </p>
-              )}
               <p className="rounds-form-hint dialog-field-full">
                 {editingCompany
                   ? `${editingCompany.rounds} interview round${editingCompany.rounds === 1 ? "" : "s"}. Use Manage rounds on the company card to update their name, status, and schedule.`
