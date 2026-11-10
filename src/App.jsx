@@ -2309,6 +2309,15 @@ function App() {
 
   function navigateToSection(section) {
     setMobileSidebarOpen(false);
+    if (section === "companies") {
+      setShowAllCollections(true);
+      setActiveCollectionId(null);
+      setCompanySearch("");
+      setCompanyStatusFilter("all");
+      setActiveView("board");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+      return;
+    }
     if (section === "dashboard") {
       setActiveView("dashboard");
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -2606,7 +2615,7 @@ function App() {
             openAddCompany();
           }}
           onViewCompanies={() => {
-            setShowAllCollections(false);
+            setShowAllCollections(true);
             setActiveCollectionId(null);
             setCompanySearch("");
             setCompanyStatusFilter("all");
