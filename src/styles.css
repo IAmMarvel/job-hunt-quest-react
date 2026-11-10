@@ -2263,6 +2263,23 @@ textarea:focus {
   padding: 4px 0;
 }
 
+.round-progress-heading {
+  margin-top: 13px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+}
+
+.round-progress-heading h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.round-progress-heading p {
+  margin: 3px 0 0;
+  color: var(--muted);
+  font-size: 14px;
+}
+
 .progress-row {
   display: grid;
   grid-template-columns: 8px minmax(88px, 1fr) minmax(52px, 1.2fr) 22px;
@@ -2298,6 +2315,16 @@ textarea:focus {
 .progress-value.selected { background: #69a875; }
 .progress-value.pending { background: #9c7bc8; }
 .progress-value.rejected { background: #94a1a8; }
+.status-dot.planned,
+.progress-value.planned { background: #94a1a8; }
+.status-dot.scheduled,
+.progress-value.scheduled { background: #d3b63c; }
+.status-dot.awaiting_result,
+.progress-value.awaiting_result { background: #e7a24f; }
+.status-dot.passed,
+.progress-value.passed { background: #69a875; }
+.status-dot.not_passed,
+.progress-value.not_passed { background: #c57772; }
 
 .redesigned-collections {
   margin-top: 22px;

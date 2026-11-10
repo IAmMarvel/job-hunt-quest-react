@@ -666,6 +666,17 @@ function DashboardView({
       companies.filter((company) => company.status === status).length,
     ]),
   );
+  const rounds = companies.flatMap((company) => company.interview_rounds ?? []);
+  const roundStatusCounts = Object.fromEntries(
+    ROUND_STATUSES.map((status) => [
+      status,
+      rounds.filter((round) => round.status === status).length,
+    ]),
+  );
+  const totalRounds = Object.values(roundStatusCounts).reduce(
+    (total, count) => total + count,
+    0,
+  );
   const scheduledRounds = companies.flatMap((company) =>
     (company.interview_rounds ?? [])
       .filter((round) => round.status === "scheduled" && round.scheduled_at)
@@ -879,6 +890,32 @@ function DashboardView({
                       <span className={`progress-value ${status}`} style={{ width: `${percent}%` }} />
                     </div>
                     <strong>{statusCounts[status]}</strong>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="round-progress-heading">
+              <h4 id="round-progress-title">Interview round progress</h4>
+              <p>
+                Across all {totalRounds} {totalRounds === 1 ? "round" : "rounds"}
+              </p>
+            </div>
+            <div className="progress-breakdown" aria-labelledby="round-progress-title">
+              {ROUND_STATUSES.map((status) => {
+                const percent = totalRounds
+                  ? Math.round((roundStatusCounts[status] / totalRounds) * 100)
+                  : 0;
+                return (
+                  <div className="progress-row" key={status}>
+                    <span className={`status-dot ${status}`} />
+                    <span>{ROUND_STATUS_LABELS[status]}</span>
+                    <div className="progress-track">
+                      <span
+                        className={`progress-value ${status}`}
+                        style={{ width: `${percent}%` }}
+                      />
+                    </div>
+                    <strong>{roundStatusCounts[status]}</strong>
                   </div>
                 );
               })}
