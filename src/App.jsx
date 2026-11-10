@@ -38,6 +38,20 @@ const BROWSER_IMPORT_KEY = "job-hunt-quest-browser-import-v1";
 const USER_CACHE_KEY = "job-hunt-quest-user-cache-v1";
 
 const STATUSES = ["selected", "running", "pending", "rejected"];
+const ROUND_STATUSES = [
+  "planned",
+  "scheduled",
+  "awaiting_result",
+  "passed",
+  "not_passed",
+];
+const ROUND_STATUS_LABELS = {
+  planned: "Planned",
+  scheduled: "Scheduled",
+  awaiting_result: "Awaiting result",
+  passed: "Passed",
+  not_passed: "Not passed",
+};
 const INTERVIEW_LANGUAGES = ["Java", "Python"];
 const DEFAULT_COLLECTION_ID = "local-bangalore-interviews";
 const DEFAULT_COLLECTION = {
@@ -126,6 +140,52 @@ function loadCompanyTarget() {
   }
 }
 
+function normalizeCompany(company) {
+  const savedRounds = Array.isArray(company.interview_rounds)
+    ? company.interview_rounds.slice(0, 20)
+    : [];
+  const legacyRoundCount = Math.max(
+    1,
+    Math.min(20, Number(company.rounds) || 1),
+  );
+  const sourceRounds = savedRounds.length
+    ? savedRounds
+    : Array.from({ length: legacyRoundCount }, (_, index) => ({
+        status:
+          index === 0 &&
+          company.status === "running" &&
+          company.scheduled_at
+            ? "scheduled"
+            : "planned",
+        scheduled_at: index === 0 ? company.scheduled_at : null,
+      }));
+  const interview_rounds = sourceRounds.map((round, index) => ({
+    number: index + 1,
+    status: ROUND_STATUSES.includes(round.status) ? round.status : "planned",
+    scheduled_at:
+      typeof round.scheduled_at === "string" &&
+      !Number.isNaN(Date.parse(round.scheduled_at))
+        ? round.scheduled_at
+        : null,
+  }));
+  return {
+    ...company,
+    rounds: interview_rounds.length,
+    interview_rounds,
+    scheduled_at:
+      typeof company.scheduled_at === "string" &&
+      !Number.isNaN(Date.parse(company.scheduled_at))
+        ? company.scheduled_at
+        : interview_rounds[0]?.scheduled_at ?? null,
+  };
+}
+
+function hasScheduledRound(company) {
+  return (company.interview_rounds ?? []).some(
+    (round) => round.status === "scheduled" && round.scheduled_at,
+  );
+}
+
 function loadCompanies(fallback = INITIAL_COMPANIES) {
   return loadFromStorage(
     STORAGE_KEYS.companies,
@@ -135,25 +195,20 @@ function loadCompanies(fallback = INITIAL_COMPANIES) {
       typeof company.name === "string" &&
       STATUSES.includes(company.status),
     fallback,
-  )
-    .map((company) => ({
+  ).map((company) => ({
+    ...normalizeCompany({
+      ...company,
       id: Number(company.id),
       name: company.name.trim(),
-      rounds: Math.max(1, Math.min(20, Number(company.rounds) || 1)),
-      status: company.status,
       is_ai_interview: company.is_ai_interview === true,
       interview_language: INTERVIEW_LANGUAGES.includes(
         company.interview_language,
       )
         ? company.interview_language
         : null,
-      scheduled_at:
-        typeof company.scheduled_at === "string" &&
-        !Number.isNaN(Date.parse(company.scheduled_at))
-          ? company.scheduled_at
-          : null,
       collection_id: company.collection_id ?? DEFAULT_COLLECTION_ID,
-    }))
+    }),
+  }))
     .filter((company) => company.name);
 }
 
@@ -605,18 +660,20 @@ function DashboardView({
       companies.filter((company) => company.status === status).length,
     ]),
   );
-  const scheduledCompanies = companies.filter(
-    (company) => company.status === "running" && company.scheduled_at,
+  const scheduledRounds = companies.flatMap((company) =>
+    (company.interview_rounds ?? [])
+      .filter((round) => round.status === "scheduled" && round.scheduled_at)
+      .map((round) => ({ company, round })),
   );
-  const upcomingCompanies = [...scheduledCompanies]
-    .filter((company) => new Date(company.scheduled_at).getTime() >= Date.now())
+  const upcomingRounds = [...scheduledRounds]
+    .filter(({ round }) => new Date(round.scheduled_at).getTime() >= Date.now())
     .sort(
       (left, right) =>
-        new Date(left.scheduled_at).getTime() -
-        new Date(right.scheduled_at).getTime(),
+        new Date(left.round.scheduled_at).getTime() -
+        new Date(right.round.scheduled_at).getTime(),
     )
     .slice(0, 3);
-  const scheduledCount = scheduledCompanies.length;
+  const scheduledCount = scheduledRounds.length;
   const [newCollectionName, setNewCollectionName] = useState("");
   const [editingTarget, setEditingTarget] = useState(false);
   const [targetValue, setTargetValue] = useState(String(companyTarget));
@@ -748,15 +805,18 @@ function DashboardView({
                 View all <span aria-hidden="true">→</span>
               </button>
             </div>
-            {upcomingCompanies.length ? (
+            {upcomingRounds.length ? (
               <div className="upcoming-list">
-                {upcomingCompanies.map((company, index) => {
-                  const date = new Date(company.scheduled_at);
+                {upcomingRounds.map(({ company, round }, index) => {
+                  const date = new Date(round.scheduled_at);
                   const collection = collections.find(
                     (item) => item.id === company.collection_id,
                   );
                   return (
-                    <article className="upcoming-item" key={company.id}>
+                    <article
+                      className="upcoming-item"
+                      key={`${company.id}-${round.number}`}
+                    >
                       <div className="upcoming-date">
                         <strong>
                           {new Intl.DateTimeFormat(undefined, { day: "2-digit" }).format(date)}
@@ -767,9 +827,14 @@ function DashboardView({
                       </div>
                       <div className="upcoming-details">
                         <strong>{company.name}</strong>
-                        <span>{collection?.name ?? "Interview"} · {company.rounds} round{company.rounds === 1 ? "" : "s"}</span>
+                        <span>
+                          Round {round.number}
+                          {collection ? ` · ${collection.name}` : ""}
+                        </span>
                       </div>
-                      <time dateTime={company.scheduled_at}>{formatScheduledTime(date)}</time>
+                      <time dateTime={round.scheduled_at}>
+                        {formatScheduledTime(date)}
+                      </time>
                       {index === 0 && <span className="sr-only">Next interview</span>}
                     </article>
                   );
@@ -889,7 +954,20 @@ function DashboardView({
   );
 }
 
-function CompanyCard({ company, collection, onMove, onEdit, onDelete }) {
+function CompanyCard({
+  company,
+  collection,
+  onMove,
+  onEdit,
+  onManageRounds,
+  onDelete,
+}) {
+  const roundSummary = (company.interview_rounds ?? [])
+    .map(
+      (round) =>
+        `R${round.number} ${ROUND_STATUS_LABELS[round.status].toLowerCase()}`,
+    )
+    .join(" · ");
   return (
     <article className="company-row">
         <span className="company-avatar" aria-hidden="true">
@@ -904,15 +982,30 @@ function CompanyCard({ company, collection, onMove, onEdit, onDelete }) {
         >
           <span className="company-name">{company.name}</span>
           <span className="company-meta">
-            {company.rounds} round{company.rounds === 1 ? "" : "s"}
+            {roundSummary || `${company.rounds} round${company.rounds === 1 ? "" : "s"}`}
             {collection && <> · {collection.name}</>}
             {company.interview_language && <> · {company.interview_language}</>}
             {company.is_ai_interview && <span className="company-ai-badge">AI interview</span>}
-            {company.scheduled_at && (
-              <time className="company-scheduled-at" dateTime={company.scheduled_at}>
-                ◷ {formatScheduledAt(company.scheduled_at)}
-              </time>
-            )}
+            {(company.interview_rounds ?? [])
+              .filter(
+                (round) =>
+                  round.status === "scheduled" && round.scheduled_at,
+              )
+              .sort(
+                (left, right) =>
+                  new Date(left.scheduled_at).getTime() -
+                  new Date(right.scheduled_at).getTime(),
+              )
+              .slice(0, 1)
+              .map((round) => (
+                <time
+                  className="company-scheduled-at"
+                  dateTime={round.scheduled_at}
+                  key={round.number}
+                >
+                  ◷ R{round.number}: {formatScheduledAt(round.scheduled_at)}
+                </time>
+              ))}
           </span>
         </button>
         <button
@@ -934,6 +1027,15 @@ function CompanyCard({ company, collection, onMove, onEdit, onDelete }) {
         ✎
       </button>
       <button
+        className="company-action company-rounds-action"
+        type="button"
+        onClick={() => onManageRounds(company)}
+        aria-label={`Manage interview rounds for ${company.name}`}
+        title="Manage interview rounds"
+      >
+        Rounds
+      </button>
+      <button
         className="company-action delete-company"
         type="button"
         onClick={() => onDelete(company)}
@@ -943,6 +1045,211 @@ function CompanyCard({ company, collection, onMove, onEdit, onDelete }) {
         ×
       </button>
     </article>
+  );
+}
+
+function InterviewRoundsDialog({ company, onClose, onSave, saving }) {
+  const [rounds, setRounds] = useState(() =>
+    (company.interview_rounds ?? []).map((round) => ({
+      ...round,
+      ...getScheduleInputValues(round.scheduled_at),
+    })),
+  );
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [onClose]);
+
+  function updateRound(index, changes) {
+    setRounds((current) =>
+      current.map((round, roundIndex) =>
+        roundIndex === index ? { ...round, ...changes } : round,
+      ),
+    );
+    setError("");
+  }
+
+  function addRound() {
+    setRounds((current) => [
+      ...current,
+      {
+        number: current.length + 1,
+        status: "planned",
+        scheduled_at: null,
+        date: "",
+        time: "",
+        period: "AM",
+      },
+    ]);
+  }
+
+  async function submitRounds(event) {
+    event.preventDefault();
+    const savedRounds = [];
+    for (const [index, round] of rounds.entries()) {
+      const hasSchedule = Boolean(round.date || round.time);
+      const scheduled_at = hasSchedule
+        ? toScheduledAt(round.date, round.time, round.period)
+        : null;
+      if (hasSchedule && scheduled_at === null) {
+        setError(`Enter a valid date and time for Round ${index + 1}.`);
+        return;
+      }
+      if (round.status === "scheduled" && scheduled_at === null) {
+        setError(`Add a date and time to schedule Round ${index + 1}.`);
+        return;
+      }
+      savedRounds.push({
+        number: index + 1,
+        status: round.status,
+        scheduled_at,
+      });
+    }
+
+    const saved = await onSave(company, savedRounds);
+    if (saved) onClose();
+  }
+
+  return (
+    <div
+      className="company-dialog-overlay"
+      role="presentation"
+      onMouseDown={(event) => {
+        if (event.target === event.currentTarget) onClose();
+      }}
+    >
+      <form
+        className="company-dialog interview-rounds-dialog"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="interview-rounds-title"
+        onSubmit={submitRounds}
+      >
+        <div className="company-dialog-heading">
+          <div>
+            <h2 id="interview-rounds-title">Interview rounds</h2>
+            <p>Track each round’s outcome and schedule separately.</p>
+          </div>
+          <button
+            type="button"
+            className="dialog-close"
+            onClick={onClose}
+            aria-label="Close dialog"
+          >
+            ×
+          </button>
+        </div>
+        <div className="interview-round-list">
+          {rounds.map((round, index) => (
+            <section className="interview-round-card" key={index}>
+              <div className="interview-round-heading">
+                <h3>Round {index + 1}</h3>
+                {rounds.length > 1 && (
+                  <button
+                    className="text-action"
+                    type="button"
+                    onClick={() =>
+                      setRounds((current) =>
+                        current
+                          .filter((_, roundIndex) => roundIndex !== index)
+                          .map((item, roundIndex) => ({
+                            ...item,
+                            number: roundIndex + 1,
+                          })),
+                      )
+                    }
+                  >
+                    Remove
+                  </button>
+                )}
+              </div>
+              <label className="dialog-field">
+                Round status
+                <select
+                  value={round.status}
+                  onChange={(event) =>
+                    updateRound(index, { status: event.target.value })
+                  }
+                >
+                  {ROUND_STATUSES.map((status) => (
+                    <option key={status} value={status}>
+                      {ROUND_STATUS_LABELS[status]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="dialog-field">
+                Interview date
+                <input
+                  type="date"
+                  value={round.date}
+                  onChange={(event) =>
+                    updateRound(index, { date: event.target.value })
+                  }
+                />
+              </label>
+              <label className="dialog-field">
+                Interview time
+                <span className="interview-time-input">
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    placeholder="09:30"
+                    pattern="(?:0[1-9]|1[0-2]):[0-5][0-9]"
+                    aria-label={`Round ${index + 1} time in 12-hour format`}
+                    value={round.time}
+                    onChange={(event) =>
+                      updateRound(index, { time: event.target.value })
+                    }
+                  />
+                  <select
+                    aria-label={`Round ${index + 1} AM or PM`}
+                    value={round.period}
+                    onChange={(event) =>
+                      updateRound(index, { period: event.target.value })
+                    }
+                  >
+                    <option value="AM">AM</option>
+                    <option value="PM">PM</option>
+                  </select>
+                </span>
+              </label>
+            </section>
+          ))}
+        </div>
+        {rounds.length < 20 && (
+          <button
+            className="secondary-action add-interview-round"
+            type="button"
+            onClick={addRound}
+          >
+            + Add round
+          </button>
+        )}
+        {error && (
+          <p className="dialog-message" role="alert">
+            {error}
+          </p>
+        )}
+        <div className="company-dialog-actions">
+          <button
+            className="secondary-action"
+            type="button"
+            onClick={onClose}
+          >
+            Cancel
+          </button>
+          <button className="primary-action" type="submit" disabled={saving}>
+            {saving ? "Saving..." : "Save rounds"}
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -1097,7 +1404,6 @@ function App() {
     !supabase,
   );
   const [companyName, setCompanyName] = useState("");
-  const [interviewCount, setInterviewCount] = useState("1");
   const [interviewLanguage, setInterviewLanguage] = useState("Java");
   const [scheduledDate, setScheduledDate] = useState("");
   const [scheduledTime, setScheduledTime] = useState("");
@@ -1107,6 +1413,7 @@ function App() {
   const [activeView, setActiveView] = useState("dashboard");
   const [companyDialogOpen, setCompanyDialogOpen] = useState(false);
   const [editingCompany, setEditingCompany] = useState(null);
+  const [roundsCompany, setRoundsCompany] = useState(null);
   const [companySearch, setCompanySearch] = useState("");
   const [companyStatusFilter, setCompanyStatusFilter] = useState("all");
   const [activeCollectionId, setActiveCollectionId] = useState(null);
@@ -1281,7 +1588,7 @@ function App() {
       const cachedData = loadUserDataCache(user.id);
       setHasUserCache(Boolean(cachedData));
       if (cachedData) {
-        setCompanies(cachedData.companies);
+        setCompanies(cachedData.companies.map(normalizeCompany));
         setCollections(cachedData.collections);
         setQuestions(cachedData.questions);
         setSkills(cachedData.skills);
@@ -1334,6 +1641,7 @@ function App() {
       }
 
       if (!active) return;
+      data.companies = data.companies.map(normalizeCompany);
       setCompanies(data.companies);
       setCollections(data.collections);
       setQuestions(data.questions);
@@ -1475,8 +1783,7 @@ function App() {
         (company) =>
           (companyStatusFilter === "all" ||
             (companyStatusFilter === "scheduled" &&
-              company.status === "running" &&
-              company.scheduled_at) ||
+              hasScheduledRound(company)) ||
             (companyStatusFilter !== "scheduled" &&
               companyStatusFilter !== "all" &&
               company.status === companyStatusFilter)) &&
@@ -1501,7 +1808,6 @@ function App() {
   function openAddCompany() {
     setEditingCompany(null);
     setCompanyName("");
-    setInterviewCount("1");
     setInterviewLanguage("Java");
     setScheduledDate("");
     setScheduledTime("");
@@ -1518,12 +1824,7 @@ function App() {
   function openEditCompany(company) {
     setEditingCompany(company);
     setCompanyName(company.name);
-    setInterviewCount(String(company.rounds));
     setInterviewLanguage(company.interview_language ?? "");
-    const scheduleValues = getScheduleInputValues(company.scheduled_at);
-    setScheduledDate(scheduleValues.date);
-    setScheduledTime(scheduleValues.time);
-    setScheduledPeriod(scheduleValues.period);
     setIsAiInterview(company.is_ai_interview);
     setCompanyStatus(company.status);
     setMessage("");
@@ -1538,14 +1839,9 @@ function App() {
   async function saveCompany(event) {
     event.preventDefault();
     const name = companyName.trim();
-    const rounds = Number(interviewCount);
 
     if (!name) {
       setMessage("Please enter a company name.");
-      return;
-    }
-    if (!Number.isInteger(rounds) || rounds < 1 || rounds > 20) {
-      setMessage("Interview count must be between 1 and 20.");
       return;
     }
     if (
@@ -1555,22 +1851,11 @@ function App() {
       setMessage("Interview language must be Java, Python, or blank.");
       return;
     }
-    const hasSchedule = Boolean(scheduledDate || scheduledTime);
-    const scheduled_at = hasSchedule
-      ? toScheduledAt(scheduledDate, scheduledTime, scheduledPeriod)
-      : null;
-    if (hasSchedule && scheduled_at === null) {
-      setMessage("Enter a valid interview date and time, or leave it blank.");
-      return;
-    }
-
     if (editingCompany) {
       const updates = {
         name,
-        rounds,
         status: companyStatus,
         interview_language: interviewLanguage || null,
-        scheduled_at,
         is_ai_interview: isAiInterview,
       };
       if (user) {
@@ -1591,6 +1876,15 @@ function App() {
       return;
     }
 
+    const hasSchedule = Boolean(scheduledDate || scheduledTime);
+    const scheduled_at = hasSchedule
+      ? toScheduledAt(scheduledDate, scheduledTime, scheduledPeriod)
+      : null;
+    if (hasSchedule && scheduled_at === null) {
+      setMessage("Enter a valid interview date and time, or leave it blank.");
+      return;
+    }
+
     const targetCollections = collections.filter((collection) =>
       selectedCollectionIds.includes(collection.id),
     );
@@ -1605,7 +1899,14 @@ function App() {
 
     const newCompany = {
       name,
-      rounds,
+      rounds: 1,
+      interview_rounds: [
+        {
+          number: 1,
+          status: scheduled_at ? "scheduled" : "planned",
+          scheduled_at,
+        },
+      ],
       status: companyStatus,
       is_ai_interview: isAiInterview,
       interview_language: interviewLanguage || null,
@@ -1635,7 +1936,6 @@ function App() {
       `${name} added to ${targetCollections.length} collection${targetCollections.length === 1 ? "" : "s"}.`,
     );
     setCompanyName("");
-    setInterviewCount("1");
     setInterviewLanguage("Java");
     setScheduledDate("");
     setScheduledTime("");
@@ -1643,6 +1943,27 @@ function App() {
     setIsAiInterview(false);
     setCompanyStatus("running");
     closeCompanyDialog();
+  }
+
+  async function saveInterviewRounds(company, interview_rounds) {
+    const updates = {
+      rounds: interview_rounds.length,
+      interview_rounds,
+      scheduled_at: interview_rounds[0]?.scheduled_at ?? null,
+    };
+    if (user) {
+      const result = await runCloudMutation(() =>
+        updateCompany(company.id, updates),
+      );
+      if (!result.ok) return false;
+    }
+    setCompanies((current) =>
+      current.map((item) =>
+        item.id === company.id ? { ...item, ...updates } : item,
+      ),
+    );
+    setMessage(`${company.name}: interview rounds updated.`);
+    return true;
   }
 
   async function moveCompany(id, targetStatus) {
@@ -2263,10 +2584,7 @@ function App() {
               >
                 Scheduled interviews{" "}
                 <span>
-                  {collectionCompanies.filter(
-                    (company) =>
-                      company.status === "running" && company.scheduled_at,
-                  ).length}
+                  {collectionCompanies.filter(hasScheduledRound).length}
                 </span>
               </button>
               {STATUSES.map((status) => (
@@ -2291,6 +2609,7 @@ function App() {
                     collection={collections.find((item) => item.id === company.collection_id)}
                     onMove={moveCompany}
                     onEdit={openEditCompany}
+                    onManageRounds={setRoundsCompany}
                     onDelete={deleteCompany}
                   />
                 ))
@@ -2671,47 +2990,49 @@ function App() {
                   ))}
                 </select>
               </label>
-              <label className="dialog-field">
-                Interview rounds
-                <input
-                  type="number"
-                  min="1"
-                  max="20"
-                  required
-                  value={interviewCount}
-                  onChange={(event) => setInterviewCount(event.target.value)}
-                />
-              </label>
-              <label className="dialog-field">
-                Interview date
-                <input
-                  type="date"
-                  value={scheduledDate}
-                  onChange={(event) => setScheduledDate(event.target.value)}
-                />
-              </label>
-              <label className="dialog-field">
-                Interview time (12-hour)
-                <span className="interview-time-input">
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="09:30"
-                    pattern="(?:0[1-9]|1[0-2]):[0-5][0-9]"
-                    aria-label="Interview time in 12-hour format"
-                    value={scheduledTime}
-                    onChange={(event) => setScheduledTime(event.target.value)}
-                  />
-                  <select
-                    aria-label="AM or PM"
-                    value={scheduledPeriod}
-                    onChange={(event) => setScheduledPeriod(event.target.value)}
-                  >
-                    <option value="AM">AM</option>
-                    <option value="PM">PM</option>
-                  </select>
-                </span>
-              </label>
+              <p className="rounds-form-hint dialog-field-full">
+                {editingCompany
+                  ? `${editingCompany.rounds} interview round${editingCompany.rounds === 1 ? "" : "s"}. Use Manage rounds on the company card to update their status and schedule.`
+                  : "Round 1 is created automatically. You can add and schedule more rounds from the company card."}
+              </p>
+              {!editingCompany && (
+                <>
+                  <label className="dialog-field">
+                    Round 1 date
+                    <input
+                      type="date"
+                      value={scheduledDate}
+                      onChange={(event) => setScheduledDate(event.target.value)}
+                    />
+                  </label>
+                  <label className="dialog-field">
+                    Round 1 time
+                    <span className="interview-time-input">
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="09:30"
+                        pattern="(?:0[1-9]|1[0-2]):[0-5][0-9]"
+                        aria-label="Round 1 time in 12-hour format"
+                        value={scheduledTime}
+                        onChange={(event) =>
+                          setScheduledTime(event.target.value)
+                        }
+                      />
+                      <select
+                        aria-label="Round 1 AM or PM"
+                        value={scheduledPeriod}
+                        onChange={(event) =>
+                          setScheduledPeriod(event.target.value)
+                        }
+                      >
+                        <option value="AM">AM</option>
+                        <option value="PM">PM</option>
+                      </select>
+                    </span>
+                  </label>
+                </>
+              )}
               <label className="dialog-field">
                 Interview language
                 <select
@@ -2773,6 +3094,14 @@ function App() {
             </div>
           </form>
         </div>
+      )}
+      {roundsCompany && (
+        <InterviewRoundsDialog
+          company={roundsCompany}
+          onClose={() => setRoundsCompany(null)}
+          onSave={saveInterviewRounds}
+          saving={saving}
+        />
       )}
     </div>
   );

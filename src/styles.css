@@ -2612,6 +2612,57 @@ textarea:focus {
   background: #f5f7f4;
 }
 
+.company-rounds-action {
+  width: auto;
+  flex-basis: auto;
+  padding: 0 7px;
+  font-weight: 750;
+}
+
+.interview-rounds-dialog {
+  width: min(100%, 560px);
+}
+
+.interview-round-list {
+  display: grid;
+  gap: 10px;
+}
+
+.interview-round-card {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: #fbfcfa;
+}
+
+.interview-round-heading {
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.interview-round-heading h3 {
+  margin: 0;
+  color: #26332c;
+  font-size: 15px;
+}
+
+.add-interview-round {
+  margin-top: 10px;
+}
+
+.rounds-form-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.5;
+}
+
 .delete-company:hover {
   color: #a53d3d;
   background: #fff5f4;
@@ -3197,6 +3248,11 @@ textarea:focus {
     flex-basis: 29px;
   }
 
+  .company-rounds-action {
+    width: auto;
+    flex-basis: auto;
+  }
+
   .mobile-workspace-nav {
     position: fixed;
     z-index: 30;
@@ -3245,6 +3301,14 @@ textarea:focus {
 
   .company-dialog-fields {
     gap: 10px;
+  }
+
+  .interview-round-card {
+    grid-template-columns: 1fr;
+  }
+
+  .interview-round-heading {
+    grid-column: 1;
   }
 
   .workspace-main .save-loading {

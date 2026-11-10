@@ -80,7 +80,7 @@ export async function fetchUserData() {
       .order("created_at"),
     supabase
       .from(TABLES.companies)
-      .select("id,name,rounds,status,is_ai_interview,interview_language,scheduled_at,collection_id")
+      .select("id,name,rounds,interview_rounds,status,is_ai_interview,interview_language,scheduled_at,collection_id")
       .order("created_at"),
     supabase
       .from(TABLES.questions)
@@ -220,6 +220,7 @@ export async function importBrowserData(userId, data, collectionId) {
       legacy_id: `company:${company.id ?? index}`,
       name: company.name,
       rounds: company.rounds,
+      interview_rounds: company.interview_rounds,
       status: company.status,
       is_ai_interview: company.is_ai_interview === true,
       interview_language:
