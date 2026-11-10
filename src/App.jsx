@@ -41,6 +41,7 @@ const STATUSES = ["selected", "running", "pending", "rejected"];
 const ROUND_STATUSES = [
   "planned",
   "scheduled",
+  "in_progress",
   "awaiting_result",
   "passed",
   "not_passed",
@@ -48,6 +49,7 @@ const ROUND_STATUSES = [
 const ROUND_STATUS_LABELS = {
   planned: "Planned",
   scheduled: "Scheduled",
+  in_progress: "Going on",
   awaiting_result: "Awaiting result",
   passed: "Passed",
   not_passed: "Not passed",
